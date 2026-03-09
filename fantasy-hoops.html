@@ -2181,72 +2181,74 @@ function renderMatchupCard(m) {
   const score = m.score || {t1:0,t2:0,ties:0};
   const t1Ahead = score.t1 > score.t2;
   const t2Ahead = score.t2 > score.t1;
-  const tied    = score.t1 === score.t2;
+
+  const allTied = score.ties === Object.keys(cr).length;
+  const allEmpty = allTied && m.status !== 'postevent';
 
   const statusBadge = m.status === 'postevent'
-    ? `<span style="color:var(--muted);font-size:0.72rem">FINAL</span>`
-    : `<span style="color:var(--green);font-size:0.72rem">● LIVE</span>`;
-
-  const catRows = CAT_ORDER.map(cat => {
-    const v1 = t1.stats?.[cat], v2 = t2.stats?.[cat];
-    const res = cr[cat] || 0;
-    const cls1 = res === 1 ? 'cat-win' : res === -1 ? 'cat-loss' : 'cat-tie';
-    const cls2 = res === -1 ? 'cat-win' : res === 1 ? 'cat-loss' : 'cat-tie';
-    return `<div class="cat-row">
-      <div class="cat-val-left ${cls1}">${fmtStat(v1,cat)}</div>
-      <div class="cat-label">${CAT_LABELS[cat]||cat.toUpperCase()}</div>
-      <div class="cat-val-right ${cls2}">${fmtStat(v2,cat)}</div>
-    </div>`;
-  }).join('');
+    ? `<span style="color:var(--muted);font-size:0.72rem;font-family:var(--font-head);font-weight:700">FINAL</span>`
+    : `<span style="color:var(--green);font-size:0.72rem;font-family:var(--font-head);font-weight:700">● LIVE</span>`;
+  const playoffsBadge = m.is_playoffs
+    ? `<span style="background:var(--gold);color:#000;font-size:0.65rem;font-family:var(--font-head);font-weight:700;padding:0.1rem 0.4rem;border-radius:3px;margin-left:0.4rem">PLAYOFFS</span>` : '';
 
   const scoreColor1 = t1Ahead ? 'var(--green)' : t2Ahead ? 'var(--red)' : 'var(--muted)';
   const scoreColor2 = t2Ahead ? 'var(--green)' : t1Ahead ? 'var(--red)' : 'var(--muted)';
-  const winnerNote = t1Ahead ? `<span style="color:var(--green);font-size:0.7rem;font-family:var(--font-head);font-weight:700">▲ LEADING</span>`
-                   : t2Ahead ? `<span style="color:var(--muted);font-size:0.7rem"> </span>` : '';
-  const winnerNote2= t2Ahead ? `<span style="color:var(--green);font-size:0.7rem;font-family:var(--font-head);font-weight:700">▲ LEADING</span>` : '';
+
+  const rem1 = t1.remaining_games != null ? `<span style="color:var(--muted);font-size:0.7rem">${t1.remaining_games} games left</span>` : '';
+  const rem2 = t2.remaining_games != null ? `<span style="color:var(--muted);font-size:0.7rem">${t2.remaining_games} games left</span>` : '';
+  const lead1 = t1Ahead ? `<span style="color:var(--green);font-size:0.7rem;font-family:var(--font-head);font-weight:700;margin-left:0.4rem">▲ LEADING</span>` : '';
+  const lead2 = t2Ahead ? `<span style="color:var(--green);font-size:0.7rem;font-family:var(--font-head);font-weight:700;margin-left:0.4rem">▲ LEADING</span>` : '';
+
+  const catGrid = CAT_ORDER.map(cat => {
+    const v1 = t1.stats?.[cat], v2 = t2.stats?.[cat];
+    const res = cr[cat] != null ? cr[cat] : 0;
+    const cls1 = res === 1 ? 'cat-win' : res === -1 ? 'cat-loss' : 'cat-tie';
+    const cls2 = res === -1 ? 'cat-win' : res === 1 ? 'cat-loss' : 'cat-tie';
+    const bg   = res === 1 ? 'rgba(34,197,94,0.07)' : res === -1 ? 'rgba(239,68,68,0.07)' : 'transparent';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.3rem 0.6rem;background:${bg};border-radius:4px;gap:0.25rem">
+      <span class="${cls1}" style="font-weight:700;min-width:44px;text-align:right;font-size:0.82rem">${fmtStat(v1,cat)}</span>
+      <span style="font-family:var(--font-head);font-size:0.7rem;font-weight:700;letter-spacing:1px;color:var(--muted);flex-shrink:0">${CAT_LABELS[cat]||cat.toUpperCase()}</span>
+      <span class="${cls2}" style="font-weight:700;min-width:44px;font-size:0.82rem">${fmtStat(v2,cat)}</span>
+    </div>`;
+  }).join('');
 
   return `<div class="matchup-card">
     <div class="matchup-header">
-      <span>WEEK ${m.week}</span>
-      ${statusBadge}
+      <span>WEEK ${m.week}${playoffsBadge}</span>
+      <span style="display:flex;align-items:center;gap:0.75rem">
+        ${allEmpty ? '<span style="color:var(--muted);font-size:0.72rem">Week just started — no stats yet</span>' : ''}
+        ${statusBadge}
+      </span>
     </div>
     <div class="matchup-body">
       <div class="matchup-team ${t1Ahead?'winner':t2Ahead?'loser':''}">
         <div class="matchup-team-name">${t1.name||'—'}</div>
-        <div class="matchup-manager">${t1.manager||''} ${winnerNote}</div>
-        <div class="matchup-score-big" style="color:${scoreColor1}">${score.t1}</div>
-        <div class="matchup-score-lbl">CATS WON</div>
-        <div class="cat-rows">${catRows.split('</div>').map((row,i) => {
-          // Extract just the left value side per row — rebuild below
-          return '';
-        }).join('')}</div>
+        <div class="matchup-manager">${t1.manager||''}</div>
+        <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.15rem">
+          <div class="matchup-score-big" style="color:${scoreColor1}">${score.t1}</div>
+          <div class="matchup-score-lbl">CATS</div>
+          ${lead1}
+        </div>
+        ${rem1}
       </div>
       <div class="matchup-divider">
         <span class="matchup-vs">VS</span>
-        <span style="font-family:var(--font-head);font-size:0.7rem;color:var(--muted);writing-mode:vertical-lr;transform:rotate(180deg)">${score.ties} TIED</span>
+        <span style="font-family:var(--font-head);font-size:0.65rem;color:var(--muted);text-align:center;line-height:1.3">${score.ties}<br>TIE</span>
       </div>
-      <div class="matchup-team ${t2Ahead?'winner':t1Ahead?'loser':''}">
-        <div class="matchup-team-name" style="text-align:right">${t2.name||'—'}</div>
-        <div class="matchup-manager" style="text-align:right">${winnerNote2} ${t2.manager||''}</div>
-        <div class="matchup-score-big" style="color:${scoreColor2};text-align:right">${score.t2}</div>
-        <div class="matchup-score-lbl" style="text-align:right">CATS WON</div>
+      <div class="matchup-team ${t2Ahead?'winner':t1Ahead?'loser':''}" style="text-align:right">
+        <div class="matchup-team-name">${t2.name||'—'}</div>
+        <div class="matchup-manager">${t2.manager||''}</div>
+        <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.15rem;justify-content:flex-end">
+          ${lead2}
+          <div class="matchup-score-lbl">CATS</div>
+          <div class="matchup-score-big" style="color:${scoreColor2}">${score.t2}</div>
+        </div>
+        ${rem2}
       </div>
     </div>
-    <!-- Full cat breakdown below teams -->
-    <div style="padding:0 1.25rem 1rem;border-top:1px solid var(--border);margin-top:0.25rem">
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.15rem;margin-top:0.75rem">
-        ${CAT_ORDER.map(cat => {
-          const v1 = t1.stats?.[cat], v2 = t2.stats?.[cat];
-          const res = cr[cat] || 0;
-          const cls1 = res === 1 ? 'cat-win' : res === -1 ? 'cat-loss' : 'cat-tie';
-          const cls2 = res === -1 ? 'cat-win' : res === 1 ? 'cat-loss' : 'cat-tie';
-          const bg = res === 1 ? 'rgba(34,197,94,0.06)' : res === -1 ? 'rgba(239,68,68,0.06)' : 'transparent';
-          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.3rem 0.6rem;background:${bg};border-radius:4px">
-            <span class="${cls1}" style="font-weight:700;min-width:40px;text-align:right;font-size:0.82rem">${fmtStat(v1,cat)}</span>
-            <span style="font-family:var(--font-head);font-size:0.7rem;font-weight:700;letter-spacing:1px;color:var(--muted);margin:0 0.4rem">${CAT_LABELS[cat]||cat.toUpperCase()}</span>
-            <span class="${cls2}" style="font-weight:700;min-width:40px;font-size:0.82rem">${fmtStat(v2,cat)}</span>
-          </div>`;
-        }).join('')}
+    <div style="padding:0.75rem 1.25rem 1rem;border-top:1px solid var(--border)">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:0.2rem">
+        ${catGrid}
       </div>
     </div>
   </div>`;

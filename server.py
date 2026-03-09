@@ -542,23 +542,29 @@ def _parse_matchup_team(team_data):
     mgr  = _extract_manager(info.get("managers"))
     team_key = info.get("team_key","")
 
-    # Walk remaining entries for team_stats
+    # Walk remaining entries for team_stats + remaining_games
     stats = {}
+    remaining_games = None
     for chunk in team_data[1:]:
         if not isinstance(chunk, dict): continue
         ts = chunk.get("team_stats") or _find_key(chunk, "team_stats")
-        if not ts: continue
-        stat_list = ts.get("stats", {})
-        if isinstance(stat_list, dict): stat_list = stat_list.get("stat", [])
-        if isinstance(stat_list, dict): stat_list = [stat_list]
-        for s in stat_list:
-            if not isinstance(s, dict): continue
-            sid  = str(s.get("stat_id",""))
-            val  = s.get("value","")
-            key  = SCOREBOARD_STAT_MAP.get(sid)
-            if key:
-                try: stats[key] = float(val) if val not in ("","—","-") else None
-                except: stats[key] = None
+        if ts:
+            stat_list = ts.get("stats", {})
+            if isinstance(stat_list, dict): stat_list = stat_list.get("stat", [])
+            if isinstance(stat_list, dict): stat_list = [stat_list]
+            for s in stat_list:
+                if not isinstance(s, dict): continue
+                sid  = str(s.get("stat_id",""))
+                val  = s.get("value","")
+                key  = SCOREBOARD_STAT_MAP.get(sid)
+                if key:
+                    try: stats[key] = float(val) if val not in ("","—","-") else None
+                    except: stats[key] = None
+        trg = chunk.get("team_remaining_games")
+        if trg and isinstance(trg, dict):
+            total = trg.get("total",{})
+            if isinstance(total, dict):
+                remaining_games = total.get("remaining_games")
 
     # Win/projected points from team_points if present
     pts_total = None
@@ -578,7 +584,8 @@ def _parse_matchup_team(team_data):
             except: pass
 
     return {"team_key": team_key, "name": name, "manager": mgr,
-            "stats": stats, "pts_total": pts_total, "win_prob": win_prob}
+            "stats": stats, "pts_total": pts_total, "win_prob": win_prob,
+            "remaining_games": remaining_games}
 
 def _score_matchup_cats(t1_stats, t2_stats):
     """Return per-cat winner: {cat: 1 (t1 wins), -1 (t2 wins), 0 (tie)}."""
@@ -623,22 +630,61 @@ def yahoo_scoreboard(lk):
             if not m_entry: continue
             week_val = m_entry.get("week","")
             status   = m_entry.get("status","")
-            # teams inside matchup — keyed "0"→team, "1"→team
-            teams_section = m_entry.get("teams") or _find_key(m_entry,"teams") or {}
+
+            # Teams are nested: matchup → '0' → 'teams' → {'0':team,'1':team,'count':2}
+            # NOT at matchup['teams'] directly
+            teams_section = None
+            for key in ["0","1","2"]:
+                candidate = m_entry.get(key,{})
+                if isinstance(candidate,dict) and "teams" in candidate:
+                    teams_section = candidate["teams"]; break
+            if not teams_section:
+                teams_section = _find_key(m_entry,"teams") or {}
+
             t_list = []
             for j in range(teams_section.get("count",2) if isinstance(teams_section,dict) else 2):
                 te = teams_section.get(str(j),{}).get("team")
                 if te: t_list.append(_parse_matchup_team(te))
             if len(t_list) < 2: continue
 
+            # Yahoo pre-computes stat_winners — use them when stats are empty (week just started)
+            # stat_winner: {stat_id, winner_team_key} or {stat_id, is_tied:1}
+            yahoo_winners = {}  # stat_id → team_key or None(tied)
+            for sw in m_entry.get("stat_winners",[]):
+                if not isinstance(sw,dict): continue
+                s = sw.get("stat_winner",{})
+                sid = str(s.get("stat_id",""))
+                if s.get("is_tied"): yahoo_winners[sid] = None
+                else: yahoo_winners[sid] = s.get("winner_team_key","")
+
+            # Build cat_result from stats first, fall back to yahoo_winners
             cat_result = _score_matchup_cats(t_list[0]["stats"], t_list[1]["stats"])
+
+            # If all stats are empty/zero, override with yahoo_winners
+            all_empty = all(v is None for v in t_list[0]["stats"].values()) and \
+                        all(v is None for v in t_list[1]["stats"].values())
+            if all_empty and yahoo_winners:
+                t1_key = t_list[0].get("team_key","")
+                for sid, winner_key in yahoo_winners.items():
+                    cat = SCOREBOARD_STAT_MAP.get(sid)
+                    if not cat: continue
+                    if winner_key is None: cat_result[cat] = 0
+                    elif winner_key == t1_key: cat_result[cat] = 1
+                    else: cat_result[cat] = -1
+
             t1_wins = sum(1 for v in cat_result.values() if v == 1)
             t2_wins = sum(1 for v in cat_result.values() if v == -1)
             ties    = sum(1 for v in cat_result.values() if v == 0)
 
+            # Add remaining games to each team
+            for team in t_list:
+                rg = _find_key(team.get("_raw_chunks",[]), "remaining_games")
+                team.pop("_raw_chunks", None)
+
             matchups.append({
                 "week": week_val or current_week,
                 "status": status,
+                "is_playoffs": m_entry.get("is_playoffs","0") == "1",
                 "team1": t_list[0],
                 "team2": t_list[1],
                 "cat_result": cat_result,

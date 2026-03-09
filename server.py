@@ -158,12 +158,8 @@ def cache_clear():
 # ── Yahoo OAuth ───────────────────────────────────────────────────────────────
 @app.route("/auth/login")
 def yahoo_login():
-    state = secrets.token_urlsafe(16)
-    _pending_states[state] = time.time()
-    # prune old states
-    cutoff = time.time() - 600
-    for k in list(_pending_states): 
-        if _pending_states[k] < cutoff: del _pending_states[k]
+    # Use a timestamp-based state — survives process restarts unlike in-memory dict
+    state = f"br_{int(time.time())}"
     params = {"client_id":YAHOO_CLIENT_ID,"redirect_uri":YAHOO_REDIRECT_URI,
               "response_type":"code","scope":"fspt-r","state":state}
     return redirect(f"{YAHOO_AUTH_URL}?{urlencode(params)}")
@@ -173,10 +169,16 @@ def yahoo_callback():
     err = request.args.get("error")
     if err: return f"<h2>Yahoo error: {err}</h2><a href='/'>Back</a>", 400
     code = request.args.get("code")
-    state = request.args.get("state")
-    if state not in _pending_states:
-        return "<h2>State invalid — <a href='/auth/login'>try again</a></h2>", 403
-    del _pending_states[state]
+    state = request.args.get("state", "")
+    # Validate state is ours and not older than 10 minutes
+    if not state.startswith("br_"):
+        return "<h2>Invalid state — <a href='/auth/login'>try again</a></h2>", 403
+    try:
+        ts = int(state.split("_")[1])
+        if time.time() - ts > 600:
+            return "<h2>Login expired — <a href='/auth/login'>try again</a></h2>", 403
+    except Exception:
+        return "<h2>Invalid state — <a href='/auth/login'>try again</a></h2>", 403
     resp = requests.post(YAHOO_TOKEN_URL, data={
         "grant_type":"authorization_code","code":code,"redirect_uri":YAHOO_REDIRECT_URI,
     }, auth=(YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET))

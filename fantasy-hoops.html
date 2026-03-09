@@ -1283,7 +1283,7 @@ function showToast(msg) {
 // =============================================
 // YAHOO FANTASY INTEGRATION
 // =============================================
-const SERVER = 'https://app.keyzen.art';
+const SERVER = 'https://keyzen.art';
 let yahooConnected = false;
 let selectedLeagueKey = null;
 let yahooRosterMap = {}; // playerName → { teamName, slot, status }
@@ -1388,6 +1388,38 @@ async function loadStandings(leagueKey) {
   } catch(e) { /* silent */ }
 }
 
+// Normalize names: lowercase, strip accents, remove punctuation
+// e.g. "Nikola Jokić" → "nikola jokic", "P.J. Washington" → "pj washington"
+function normName(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// Build lookup map once after PLAYERS is built
+let _playerNormMap = null;
+function getPlayerNormMap() {
+  if (!_playerNormMap) {
+    _playerNormMap = {};
+    PLAYERS.forEach(p => { _playerNormMap[normName(p.name)] = p; });
+  }
+  return _playerNormMap;
+}
+
+function findPlayerByName(yahooName) {
+  const map = getPlayerNormMap();
+  const norm = normName(yahooName);
+  // 1. Exact normalized match
+  if (map[norm]) return map[norm];
+  // 2. Last name match (catches "Jr." suffix differences)
+  const lastName = norm.split(' ').slice(-1)[0];
+  if (lastName.length > 3) {
+    const byLast = PLAYERS.find(p => normName(p.name).endsWith(lastName) &&
+      normName(p.name).split(' ')[0][0] === norm[0]); // same first initial
+    if (byLast) return byLast;
+  }
+  return null;
+}
+
 async function syncYahooRosters(leagueKey) {
   leagueKey = leagueKey || selectedLeagueKey;
   if (!leagueKey) { showToast('Select a league first'); return; }
@@ -1397,29 +1429,30 @@ async function syncYahooRosters(leagueKey) {
     const r = await fetch(`${SERVER}/api/yahoo/league/${leagueKey}/rosters`, { credentials: 'include' });
     const d = await r.json();
     if (d.error) { showToast('Roster sync failed: ' + d.error); return; }
-    // Build owned set + roster map
     owned.clear();
     yahooRosterMap = {};
+    _playerNormMap = null; // reset so it rebuilds with latest PLAYERS
     const rosters = d.rosters || [];
+    let matched = 0, unmatched = [];
     rosters.forEach(team => {
       (team.players || []).forEach(p => {
-        yahooRosterMap[p.name.toLowerCase()] = {
+        yahooRosterMap[normName(p.name)] = {
           teamName: team.name, manager: team.manager,
           slot: p.slot, status: p.status, injuryNote: p.injury_note,
           teamKey: team.team_key,
         };
-        // Mark as owned in our player list
-        const match = PLAYERS.find(pl => pl.name.toLowerCase() === p.name.toLowerCase()
-          || p.name.toLowerCase().includes(pl.name.toLowerCase().split(' ')[1] || ''));
-        if (match) owned.add(match.id);
+        const match = findPlayerByName(p.name);
+        if (match) { owned.add(match.id); matched++; }
+        else unmatched.push(p.name);
       });
     });
-    // Render rosters grid
+    if (unmatched.length) console.log('Unmatched Yahoo players:', unmatched);
     renderRostersGrid(rosters);
     renderTable();
-    if (statusEl) statusEl.textContent = `${rosters.length} teams · ${Object.keys(yahooRosterMap).length} players synced`;
-    showToast(`✓ Rosters synced — ${Object.keys(yahooRosterMap).length} players`);
-  } catch(e) { showToast('Roster sync error'); }
+    const total = Object.keys(yahooRosterMap).length;
+    if (statusEl) statusEl.textContent = `${rosters.length} teams · ${matched}/${total} players matched`;
+    showToast(`✓ Rosters synced — ${matched}/${total} matched`);
+  } catch(e) { console.error(e); showToast('Roster sync error'); }
 }
 
 function renderRostersGrid(rosters) {

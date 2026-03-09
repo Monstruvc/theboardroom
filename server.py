@@ -19,7 +19,7 @@ CORS(app, supports_credentials=True)
 # ─── YAHOO CONFIG ───────────────────────────────────────────────────────────
 YAHOO_CLIENT_ID     = os.environ.get("YAHOO_CLIENT_ID",     "dj0yJmk9TmV3N2cwSzVBZmtlJmQ9WVdrOWRHVkJUV3hTVEhvbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PWZj")
 YAHOO_CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET", "26b682df3839b70b040110b696a248d3c48fa442")
-YAHOO_REDIRECT_URI  = os.environ.get("YAHOO_REDIRECT_URI",  "https://keyzen.art/auth/callback")
+YAHOO_REDIRECT_URI  = os.environ.get("YAHOO_REDIRECT_URI",  "https://app.keyzen.art/auth/callback")
 YAHOO_AUTH_URL  = "https://api.login.yahoo.com/oauth2/request_auth"
 YAHOO_TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 YAHOO_API_BASE  = "https://fantasysports.yahooapis.com/fantasy/v2"

@@ -319,22 +319,22 @@
           <tr>
             <th onclick="sortBy('rank')" id="th-rank">RK</th>
             <th onclick="sortBy('name')" id="th-name">PLAYER</th>
-            <th>POS</th>
-            <th>AGE</th>
+            <th onclick="sortBy('pos')" id="th-pos">POS</th>
+            <th onclick="sortBy('age')" id="th-age">AGE</th>
             <th onclick="sortBy('overall')" id="th-overall">OVERALL ▼</th>
             <th onclick="sortBy('catScore')" id="th-catScore">CAT</th>
             <th onclick="sortBy('dynastyScore')" id="th-dynastyScore">DYN</th>
             <th>TIER</th>
-            <th>PTS</th>
-            <th>REB</th>
-            <th>AST</th>
-            <th>3PM</th>
-            <th>ST</th>
-            <th>BLK</th>
-            <th>TO</th>
-            <th>DD%</th>
-            <th>TD%</th>
-            <th title="Risk penalty applied to overall score">RISK ▼</th>
+            <th onclick="sortBy('pts')" id="th-pts">PTS</th>
+            <th onclick="sortBy('reb')" id="th-reb">REB</th>
+            <th onclick="sortBy('ast')" id="th-ast">AST</th>
+            <th onclick="sortBy('threepm')" id="th-threepm">3PM</th>
+            <th onclick="sortBy('stl')" id="th-stl">ST</th>
+            <th onclick="sortBy('blk')" id="th-blk">BLK</th>
+            <th onclick="sortBy('to')" id="th-to">TO</th>
+            <th onclick="sortBy('dd')" id="th-dd">DD%</th>
+            <th onclick="sortBy('td')" id="th-td">TD%</th>
+            <th onclick="sortBy('riskPenalty')" id="th-riskPenalty" title="Risk penalty applied to overall score">RISK ▼</th>
             <th>ACTION</th>
           </tr>
         </thead>
@@ -352,6 +352,10 @@
 
   <div class="card" style="margin-bottom:1rem">
     <div class="card-title">YOUR ROSTER (enter player names)</div>
+    <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
+      <button class="btn" style="background:#6001d3;font-size:0.78rem;padding:0.3rem 0.9rem" onclick="syncRosterToBalance()">⚡ Import from Yahoo</button>
+      <span style="color:var(--muted);font-size:0.78rem" id="balanceSyncStatus"></span>
+    </div>
     <div class="roster-grid" id="rosterInputs"></div>
     <button class="btn" onclick="analyzeRoster()">Analyze Roster</button>
   </div>
@@ -376,6 +380,10 @@
 
   <div class="card" style="margin-bottom:1rem">
     <div class="card-title">SELECT YOUR CURRENT ROSTER TO FIND BEST 3 KEEPS</div>
+    <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
+      <button class="btn" style="background:#6001d3;font-size:0.78rem;padding:0.3rem 0.9rem" onclick="syncRosterToKeepers()">⚡ Import from Yahoo</button>
+      <span style="color:var(--muted);font-size:0.78rem" id="keeperSyncStatus"></span>
+    </div>
     <div id="keeperRosterInputs" class="roster-grid"></div>
     <button class="btn" onclick="analyzeKeepers()">Find Best Keeps</button>
   </div>
@@ -667,6 +675,103 @@ const PLAYERS_RAW = [
   ["Kel'el Ware","C",22,15.0,9.3,2.4,0.4,0.8,1.8,1.4,5.6,3.8,0.40,0.02,86,10],
   ["Josh Hart","PG",30,12.4,8.4,5.0,0.6,1.4,0.4,1.8,4.6,2.4,0.40,0.03,68,15],
   ["Dejounte Murray","PG",29,17.4,5.0,5.8,1.4,1.8,0.5,2.8,5.8,3.4,0.26,0.02,74,20],
+  // FROM YAHOO ROSTERS — players not yet in database
+  ["Jeremiah Fears","PG",19,12.8,3.4,5.2,1.0,1.2,0.3,2.2,4.4,2.8,0.10,0.00,86,10],
+  ["Jaylen Wells","SF",23,13.2,4.2,2.0,1.6,1.0,0.4,1.4,4.6,2.4,0.12,0.00,72,10],
+  ["Noah Clowney","PF",21,10.8,6.4,1.4,0.6,0.8,0.8,1.2,3.8,2.0,0.16,0.00,72,10],
+  ["Moussa Diabate","C",23,9.4,6.8,1.2,0.4,0.6,0.8,1.2,3.4,2.0,0.20,0.00,68,10],
+  ["Brandon Miller","SF",22,16.8,4.2,2.4,2.0,0.9,0.5,1.8,5.8,3.2,0.12,0.00,78,10],
+  ["Ryan Rollins","SG",23,10.4,3.2,2.8,1.4,1.0,0.3,1.6,3.6,2.0,0.08,0.00,68,10],
+  ["Tobias Harris","PF",33,13.8,5.4,2.4,1.0,0.8,0.4,1.4,5.0,3.2,0.18,0.01,58,15],
+  ["Matas Buzelis","PF",21,13.2,5.6,2.0,0.8,0.8,0.8,1.4,4.6,2.4,0.18,0.00,80,10],
+  ["Kyle Filipowski","C",22,12.4,6.8,3.2,0.8,0.6,0.6,1.8,4.2,2.8,0.22,0.01,76,10],
+  ["Collin Gillespie","PG",27,9.8,2.4,3.8,1.6,0.8,0.2,1.4,3.2,2.0,0.06,0.00,58,10],
+  ["Jrue Holiday","PG",35,12.4,5.2,5.6,1.4,1.6,0.4,2.0,4.4,2.4,0.22,0.01,64,15],
+  ["Donte DiVincenzo","PG",28,14.2,4.0,3.8,2.6,1.0,0.3,1.8,4.8,2.8,0.12,0.00,70,15],
+  ["Kelly Oubre Jr.","SF",29,13.8,4.8,2.2,1.4,1.0,0.5,1.8,4.8,2.8,0.14,0.00,64,20],
+  ["Alex Sarr","C",20,13.8,7.2,1.8,0.8,0.8,2.0,1.8,4.8,2.8,0.24,0.01,90,15],
+  ["Jarrett Allen","C",27,14.2,10.4,2.2,0.2,0.8,1.4,1.4,5.6,3.4,0.52,0.01,76,20],
+  ["Ousmane Dieng","SF",22,10.4,4.8,2.4,0.8,0.8,0.6,1.4,3.6,1.8,0.12,0.00,72,10],
+  ["Collin Sexton","PG",27,18.4,3.2,4.8,1.8,1.0,0.2,2.2,6.4,4.0,0.16,0.00,74,20],
+  ["Reed Sheppard","PG",21,12.8,3.6,4.4,1.8,1.4,0.3,1.8,4.2,2.8,0.10,0.00,80,10],
+  ["Aaron Nesmith","SF",26,12.8,4.8,2.0,1.4,1.0,0.4,1.2,4.4,2.4,0.14,0.00,68,10],
+  ["Bobby Portis","PF",31,14.2,7.2,1.8,1.2,0.6,0.4,1.4,5.0,3.2,0.26,0.01,64,15],
+  ["Deandre Ayton","C",27,14.8,9.8,2.0,0.4,0.8,0.8,1.8,6.0,4.0,0.46,0.01,70,25],
+  ["Jakob Poeltl","C",30,12.4,10.4,3.4,0.2,0.8,1.6,1.6,4.8,3.2,0.50,0.01,68,15],
+  ["Trae Young","PG",27,23.8,3.2,9.0,1.8,0.9,0.1,3.2,7.0,8.4,0.34,0.04,85,15],
+  ["Paul George","SF",35,15.8,5.4,3.8,1.8,1.2,0.4,2.0,5.4,3.8,0.18,0.01,68,40],
+  ["Cedric Coward","SF",24,10.2,4.4,2.2,1.4,0.8,0.4,1.2,3.6,1.8,0.10,0.00,70,10],
+  ["Quentin Grimes","SG",25,12.4,3.6,2.4,2.0,0.8,0.3,1.4,4.2,2.4,0.10,0.00,68,15],
+  ["Gui Santos","SF",23,9.4,4.2,2.0,1.2,0.8,0.4,1.2,3.2,1.6,0.10,0.00,66,10],
+  ["Precious Achiuwa","PF",26,10.8,7.4,1.4,0.6,0.8,0.8,1.4,4.0,2.0,0.24,0.01,66,15],
+  ["Neemias Queta","C",26,9.8,7.8,1.4,0.4,0.6,1.4,1.0,3.8,2.4,0.32,0.00,68,10],
+  ["Maxime Raynaud","C",23,11.2,8.4,1.4,0.4,0.6,0.8,1.2,4.0,2.4,0.28,0.00,72,10],
+  ["Grayson Allen","SG",30,12.8,3.8,2.4,2.4,0.8,0.3,1.4,4.4,2.4,0.10,0.00,64,20],
+  ["Andrew Wiggins","SF",30,15.8,5.0,2.4,1.4,1.0,0.6,1.6,5.6,2.8,0.18,0.01,68,20],
+  ["P.J. Washington","PF",27,14.2,6.4,2.8,1.6,1.0,0.8,1.6,5.0,3.0,0.22,0.01,70,15],
+  ["Payton Pritchard","PG",28,17.4,3.8,4.2,3.2,0.8,0.2,1.8,5.8,3.0,0.14,0.00,72,10],
+  ["Cam Spencer","SG",25,12.4,3.2,3.4,2.4,0.8,0.2,1.4,4.0,2.4,0.10,0.00,68,10],
+  ["Bennedict Mathurin","SG",23,16.8,4.8,2.4,1.6,0.8,0.4,1.8,5.8,3.2,0.16,0.00,74,15],
+  ["Nique Clifford","SF",23,10.4,5.2,2.4,1.2,1.0,0.4,1.4,3.6,1.8,0.14,0.00,68,10],
+  ["Russell Westbrook","PG",37,10.4,5.2,6.4,0.8,1.0,0.3,2.8,3.8,2.2,0.28,0.02,52,20],
+  ["Kristaps Porzingis","C",30,14.8,7.4,2.0,0.8,0.6,1.8,1.6,5.4,3.6,0.30,0.01,72,45],
+  ["Santi Aldama","PF",24,13.4,6.0,2.4,1.6,0.8,0.8,1.4,4.6,2.6,0.20,0.01,72,15],
+  ["Ty Jerome","PG",28,16.4,3.4,5.2,2.4,0.8,0.3,1.8,5.4,3.2,0.14,0.00,72,15],
+  ["Jaime Jaquez Jr.","SF",24,12.8,5.0,3.0,1.4,1.0,0.4,1.6,4.4,2.4,0.16,0.00,72,10],
+  ["Saddiq Bey","SF",26,12.4,5.4,2.0,1.8,0.8,0.4,1.4,4.2,2.4,0.16,0.00,66,15],
+  ["Onyeka Okongwu","C",25,13.4,8.8,2.4,0.6,0.8,1.4,1.4,5.2,2.8,0.36,0.01,76,15],
+  ["Derik Queen","C",19,12.0,8.0,3.4,0.2,0.8,1.2,2.0,4.4,2.4,0.30,0.01,84,10],
+  ["CJ McCollum","SG",34,16.4,3.8,5.2,2.0,1.0,0.3,2.0,5.6,3.6,0.16,0.01,64,20],
+  ["Dennis Schroder","PG",32,14.8,3.4,5.8,1.6,1.0,0.3,2.2,5.0,3.2,0.14,0.00,62,15],
+  ["Jaden McDaniels","SF",25,14.2,5.0,2.4,1.4,1.4,0.8,1.4,5.0,2.4,0.18,0.00,74,15],
+  ["Peyton Watson","SF",22,10.8,4.8,2.0,1.0,1.0,0.8,1.2,3.8,1.8,0.14,0.00,72,10],
+  ["Kevin Porter Jr.","SG",25,12.4,3.8,4.4,1.2,1.0,0.3,2.2,4.2,2.8,0.12,0.00,64,25],
+  ["Deni Avdija","SF",24,16.8,7.2,4.8,1.4,1.2,0.6,2.0,5.8,2.8,0.30,0.02,80,10],
+  ["Nikola Vucevic","C",35,16.8,11.2,3.0,0.8,0.8,0.6,1.8,6.6,3.2,0.52,0.02,55,15],
+  ["Isaiah Hartenstein","C",27,10.8,9.8,3.8,0.1,1.0,1.2,1.6,4.2,3.0,0.44,0.01,72,20],
+  ["Aaron Gordon","PF",30,12.4,6.4,3.4,0.8,1.0,0.5,1.6,4.8,2.4,0.26,0.01,68,20],
+  ["Draymond Green","PF",35,8.0,7.0,6.0,0.6,1.2,0.8,3.0,2.4,1.6,0.34,0.05,55,30],
+  ["Klay Thompson","SG",35,14.0,3.0,2.2,2.8,0.6,0.3,1.2,5.0,2.8,0.10,0.00,60,25],
+  ["Ivica Zubac","C",28,13.4,10.4,2.4,0.1,0.8,1.4,1.6,5.4,4.2,0.52,0.01,65,15],
+  ["Marcus Smart","PG",31,11.8,3.8,5.6,1.4,1.6,0.3,2.4,4.0,2.8,0.14,0.01,64,30],
+  ["Kyle Kuzma","PF",30,18.0,7.2,3.6,1.4,0.9,0.5,1.8,6.2,4.0,0.28,0.01,68,15],
+  ["Jalen Hood-Schifino","PG",21,11.8,3.8,4.8,1.2,1.0,0.3,2.0,4.0,2.8,0.12,0.00,78,10],
+  ["Jay Huff","C",27,10.8,7.4,1.2,0.2,0.6,1.9,1.2,3.8,2.4,0.28,0.01,65,10],
+  ["Isaiah Collier","PG",21,16.8,4.2,7.4,1.2,1.6,0.4,3.0,5.4,3.8,0.18,0.01,84,10],
+  ["Tristan da Silva","SF",24,13.4,5.4,2.8,1.8,0.9,0.5,1.4,4.4,2.6,0.14,0.00,72,10],
+  ["Toumani Camara","SF",24,13.6,5.8,2.6,1.4,1.2,0.6,1.4,4.6,2.6,0.18,0.01,72,10],
+  ["Jaden Ivey","PG",23,17.8,4.2,5.4,1.6,1.1,0.4,2.6,5.8,3.8,0.18,0.01,80,15],
+  ["Devin Vassell","SG",25,17.8,4.0,3.2,2.4,1.2,0.5,1.6,6.0,3.8,0.18,0.01,76,20],
+  ["Naz Reid","C",26,16.4,6.4,2.6,2.0,0.6,1.2,1.4,5.8,3.2,0.26,0.01,72,15],
+  ["Jonathan Kuminga","PF",23,19.0,5.6,3.0,0.8,0.9,0.6,2.0,7.0,4.0,0.24,0.02,86,15],
+  ["Myles Turner","C",30,17.8,8.5,1.6,1.3,0.7,2.0,1.6,6.7,3.0,0.32,0.01,72,20],
+  ["Jalen Suggs","SG",24,17.0,4.4,5.8,1.6,1.8,0.6,2.2,5.8,3.2,0.22,0.01,80,25],
+  ["RJ Barrett","SF",25,20.4,6.0,3.8,2.0,1.0,0.5,2.2,7.2,4.4,0.26,0.02,78,15],
+  ["Austin Reaves","SG",27,18.6,4.0,5.2,2.4,1.0,0.3,2.0,6.0,4.6,0.20,0.01,76,15],
+  ["Christian Braun","SG",24,15.2,5.2,3.0,1.8,1.2,0.6,1.4,5.4,2.8,0.20,0.01,78,10],
+  ["Coby White","PG",25,18.9,3.3,4.0,3.4,0.7,0.2,2.2,6.6,2.4,0.16,0.00,76,15],
+  ["Keegan Murray","SF",25,17.2,5.4,2.2,2.4,1.0,0.6,1.4,5.8,3.6,0.16,0.01,78,10],
+  ["Bilal Coulibaly","SG",21,13.8,5.0,3.2,1.2,1.4,0.7,1.6,4.6,2.6,0.16,0.01,82,10],
+  ["Walker Kessler","C",24,9.0,9.8,1.6,0.1,0.6,2.4,1.0,3.4,2.8,0.44,0.01,80,10],
+  ["Anfernee Simons","PG",26,20.4,3.4,4.5,3.4,0.8,0.2,2.2,6.6,4.5,0.18,0.00,78,15],
+  ["Ayo Dosunmu","SG",25,15.4,4.2,4.8,1.6,1.1,0.3,1.8,5.2,3.2,0.18,0.01,72,15],
+  ["Gradey Dick","SG",22,14.8,3.6,2.0,2.8,0.6,0.3,1.0,4.8,2.4,0.08,0.00,80,10],
+  ["GG Jackson","PF",21,16.0,6.0,2.0,1.0,0.8,0.7,1.8,5.6,3.2,0.18,0.01,80,10],
+  ["Brandin Podziemski","SG",23,13.4,6.2,5.0,1.8,1.4,0.3,2.0,4.8,3.2,0.22,0.01,78,10],
+  ["Dereck Lively II","C",22,12.4,8.0,2.0,0.1,0.9,2.4,1.2,4.8,3.2,0.28,0.01,84,10],
+  ["Daniel Gafford","C",27,12.4,8.0,1.6,0.1,0.6,2.4,1.0,4.8,3.4,0.36,0.01,72,15],
+  ["Luguentz Dort","SG",26,15.8,4.0,2.4,2.4,1.2,0.5,1.4,5.4,3.0,0.12,0.00,72,10],
+  ["Mikal Bridges","SG",29,17.6,4.8,3.8,2.0,0.8,0.4,2.0,6.6,3.4,0.18,0.00,74,10],
+  ["OG Anunoby","SF",28,18.8,5.8,3.6,1.4,1.6,0.5,2.2,6.6,3.8,0.22,0.01,78,25],
+  ["Domantas Sabonis","C",29,17.8,12.4,7.2,0.4,0.9,0.3,2.6,7.2,3.4,0.72,0.10,76,15],
+  ["Bam Adebayo","C",28,18.6,9.8,5.1,0.4,1.3,0.5,2.6,7.2,6.8,0.50,0.03,80,15],
+  ["Franz Wagner","SF",24,20.1,6.3,4.2,1.7,1.4,0.5,2.4,7.8,4.3,0.30,0.02,86,15],
+  ["Rudy Gobert","C",33,12.8,11.4,1.8,0.1,0.8,1.6,1.6,5.0,4.6,0.62,0.02,58,20],
+  ["Cam Thomas","SG",23,25.2,4.2,3.8,1.6,0.8,0.3,2.4,8.8,6.4,0.22,0.01,84,15],
+  ["Immanuel Quickley","PG",26,20.4,5.4,7.2,2.2,1.2,0.3,2.4,6.8,4.8,0.24,0.01,80,15],
+  ["Tyler Herro","SG",25,23.8,4.1,6.8,2.5,0.9,0.3,3.0,7.5,6.3,0.22,0.01,82,20],
+  ["Jabari Smith Jr.","PF",23,16.0,7.2,2.2,2.0,1.0,1.0,1.6,5.6,2.8,0.22,0.01,84,15],
+  ["Jalen Williams","SG",25,19.6,8.3,5.4,1.0,1.3,0.5,2.6,7.6,3.3,0.42,0.03,88,15],
 ];
 
 // =============================================
@@ -755,45 +860,25 @@ let liveStatsMap = {}; // name → { pts, reb, ast, ... }
 
 async function fetchLiveStats() {
   const statusEl = document.getElementById('liveStatsStatus');
-  if (statusEl) statusEl.textContent = 'Fetching live NBA stats...';
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--muted)">⟳ Fetching live stats...</span>';
   try {
-    // NBA Stats API — current season per-game leaders
-    const url = 'https://stats.nba.com/stats/leaguedashplayerstats?College=&Conference=&Country=&DateFrom=&DateTo=&Division=&DraftPick=&DraftYear=&GameScope=&GameSegment=&Height=&ISTRound=&LastNGames=0&LeagueID=00&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2024-25&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=&Weight=';
-    const resp = await fetch(url, {
-      headers: {
-        'Referer': 'https://www.nba.com/',
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': 'application/json',
-        'x-nba-stats-origin': 'stats',
-        'x-nba-stats-token': 'true'
-      }
-    });
-    if (!resp.ok) throw new Error('NBA API unavailable');
+    const resp = await fetch(`${SERVER}/api/stats/current`, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) throw new Error('Server unavailable');
     const data = await resp.json();
-    const headers = data.resultSets[0].headers;
-    const rows = data.resultSets[0].rowSet;
-    const idx = (k) => headers.indexOf(k);
-    rows.forEach(row => {
-      const name = row[idx('PLAYER_NAME')];
-      liveStatsMap[name] = {
-        pts:  row[idx('PTS')],
-        reb:  row[idx('REB')],
-        ast:  row[idx('AST')],
-        stl:  row[idx('STL')],
-        blk:  row[idx('BLK')],
-        to:   row[idx('TOV')],
-        fgm:  row[idx('FGM')],
-        ftm:  row[idx('FTM')],
-        threepm: row[idx('FG3M')],
-        gp:   row[idx('GP')],
+    if (!data.players || data.players.length === 0) throw new Error('No stats returned');
+    data.players.forEach(p => {
+      liveStatsMap[p.name] = {
+        pts: p.pts, reb: p.reb, ast: p.ast, stl: p.stl, blk: p.blk,
+        to: p.to, fgm: p.fgm, ftm: p.ftm, threepm: p.threepm,
+        gp: p.gp, dd_est: p.dd_est, td_est: p.td_est, team: p.team,
       };
     });
     liveStatsLoaded = true;
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--green)">✓ Live 2024-25 stats loaded</span>';
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--green)">✓ Live ${data.season} stats loaded — ${data.count} players</span>`;
     buildPlayers();
     renderTable();
   } catch(e) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold)">⚠ Using built-in stats (live fetch blocked by browser CORS — normal for local files)</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold)">⚠ Using built-in projections · <a href="#" onclick="fetchLiveStats();return false" style="color:var(--accent)">Retry</a></span>';
   }
 }
 
@@ -859,7 +944,7 @@ function calcOverall(p) {
   const raw = Math.min(1, Math.max(0, cat / CAT_CEIL));
   const catNorm = OUT_LO + Math.pow(raw, CURVE) * (OUT_HI - OUT_LO);
   const riskPenalty = getRiskPenalty(p[0]);
-  return Math.round(Math.max(1, catNorm - riskPenalty));
+  return Math.round(Math.min(99, Math.max(1, catNorm - riskPenalty)));
 }
 
 function getTier(overall) {
@@ -935,8 +1020,11 @@ function renderTable() {
   });
 
   const sortKey = view === 'dynasty' ? 'dynastyScore' : view === 'cats' ? 'catScore' : sortCol;
-  filtered.sort((a, b) => (sortDir * (b[sortKey] - a[sortKey])) || (b.catScore - a.catScore) || (b.dynastyScore - a.dynastyScore));
-  if (sortCol === 'name') filtered.sort((a, b) => sortDir * a.name.localeCompare(b.name));
+  const strCols = new Set(['name','pos']);
+  filtered.sort((a, b) => {
+    if (strCols.has(sortKey)) return sortDir * (a[sortKey]||'').localeCompare(b[sortKey]||'');
+    return (sortDir * ((b[sortKey]||0) - (a[sortKey]||0))) || (b.catScore - a.catScore) || (b.dynastyScore - a.dynastyScore);
+  });
 
   document.getElementById('countLabel').textContent = `${filtered.length} players`;
 
@@ -1281,6 +1369,48 @@ function showToast(msg) {
 }
 
 // =============================================
+// YAHOO → ROSTER TAB SYNC HELPERS
+// =============================================
+async function _fetchMyRosterPlayers() {
+  if (!yahooConnected || !selectedLeagueKey) return null;
+  try {
+    const r = await fetch(`${SERVER}/api/yahoo/league/${selectedLeagueKey}/my_team`, { credentials: 'include' });
+    const d = await r.json();
+    if (d.error || !d.players) return null;
+    return d.players.map(p => p.name).filter(Boolean);
+  } catch(e) { return null; }
+}
+
+function _fillRosterInputs(containerId, names) {
+  names.forEach((name, i) => {
+    const el = document.getElementById(`${containerId}-slot-${i}`);
+    if (el) el.value = name;
+  });
+}
+
+async function syncRosterToBalance() {
+  const statusEl = document.getElementById('balanceSyncStatus');
+  if (!yahooConnected) { if (statusEl) statusEl.textContent = 'Connect Yahoo first'; return; }
+  if (statusEl) statusEl.textContent = 'Importing...';
+  const names = await _fetchMyRosterPlayers();
+  if (!names) { if (statusEl) statusEl.textContent = 'Could not load roster'; return; }
+  _fillRosterInputs('rosterInputs', names);
+  if (statusEl) statusEl.textContent = `✓ ${names.length} players imported`;
+  analyzeRoster();
+}
+
+async function syncRosterToKeepers() {
+  const statusEl = document.getElementById('keeperSyncStatus');
+  if (!yahooConnected) { if (statusEl) statusEl.textContent = 'Connect Yahoo first'; return; }
+  if (statusEl) statusEl.textContent = 'Importing...';
+  const names = await _fetchMyRosterPlayers();
+  if (!names) { if (statusEl) statusEl.textContent = 'Could not load roster'; return; }
+  _fillRosterInputs('keeperRosterInputs', names);
+  if (statusEl) statusEl.textContent = `✓ ${names.length} players imported`;
+  analyzeKeepers();
+}
+
+// =============================================
 // YAHOO FANTASY INTEGRATION
 // =============================================
 const SERVER = 'https://app.keyzen.art';
@@ -1368,16 +1498,20 @@ async function selectLeague(leagueKey, leagueName) {
 
 async function loadStandings(leagueKey) {
   try {
-    const r = await fetch(`${SERVER}/api/yahoo/league/${leagueKey}/standings`, { credentials: 'include' });
+    // Always fetch fresh standings (bust cache with timestamp)
+    const r = await fetch(`${SERVER}/api/yahoo/league/${leagueKey}/standings?t=${Date.now()}`, { credentials: 'include' });
     const d = await r.json();
-    if (d.error) return;
     const tbody = document.getElementById('standingsTable');
     if (!tbody) return;
+    if (d.error || !d.teams || d.teams.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red);padding:1rem">Could not load standings: ${d.error||'no data'} ${d.trace ? '— check server logs' : ''}</td></tr>`;
+      return;
+    }
     tbody.innerHTML = (d.teams || []).sort((a,b) => (a.rank||99) - (b.rank||99)).map(t => `
       <tr>
         <td><span class="rank-badge ${t.rank<=3?'top10':t.rank<=5?'top25':''}">${t.rank||'—'}</span></td>
         <td><strong>${t.name}</strong></td>
-        <td style="color:var(--muted)">${t.manager}</td>
+        <td style="color:var(--muted)">${t.manager||'—'}</td>
         <td style="color:var(--green)">${t.wins??'—'}</td>
         <td style="color:var(--red)">${t.losses??'—'}</td>
         <td style="color:var(--muted)">${t.ties??'—'}</td>
@@ -1385,7 +1519,10 @@ async function loadStandings(leagueKey) {
         <td>${t.points_for??'—'}</td>
         <td>${t.points_against??'—'}</td>
       </tr>`).join('');
-  } catch(e) { /* silent */ }
+  } catch(e) {
+    const tbody = document.getElementById('standingsTable');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red);padding:1rem">Error: ${e.message}</td></tr>`;
+  }
 }
 
 // Normalize names: lowercase, strip accents, remove punctuation

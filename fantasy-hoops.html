@@ -227,10 +227,84 @@
   .queue-chip button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.75rem; line-height: 1; }
   .queue-chip button:hover { color: var(--red); }
 
+  /* MATCHUP CARDS */
+  .matchup-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; margin-bottom: 1.25rem;
+  }
+  .matchup-header {
+    background: var(--surface2); padding: 0.6rem 1rem;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--font-head); font-size: 0.78rem; font-weight: 700;
+    letter-spacing: 1px; color: var(--muted);
+  }
+  .matchup-body {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: stretch;
+  }
+  .matchup-team {
+    padding: 1rem 1.25rem;
+  }
+  .matchup-team.winner { background: rgba(34,197,94,0.04); }
+  .matchup-team.loser  { background: rgba(239,68,68,0.04); }
+  .matchup-team-name {
+    font-family: var(--font-head); font-weight: 900; font-size: 1.1rem;
+    margin-bottom: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .matchup-manager { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem; }
+  .matchup-score-big {
+    font-family: var(--font-head); font-weight: 900; font-size: 2.4rem; line-height: 1;
+  }
+  .matchup-score-lbl { font-size: 0.7rem; color: var(--muted); letter-spacing: 1px; font-family: var(--font-head); }
+  .matchup-divider {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 0.75rem 0.5rem; gap: 0.4rem; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+    min-width: 44px;
+  }
+  .matchup-vs { font-family: var(--font-head); font-weight: 900; font-size: 0.8rem; color: var(--muted); }
+  .cat-rows { margin-top: 0.75rem; }
+  .cat-row {
+    display: grid; grid-template-columns: 1fr 60px 1fr;
+    align-items: center; gap: 0.25rem; padding: 0.22rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 0.8rem;
+  }
+  .cat-row:last-child { border-bottom: none; }
+  .cat-val-left  { text-align: right; font-weight: 600; }
+  .cat-val-right { text-align: left;  font-weight: 600; }
+  .cat-label { text-align: center; font-family: var(--font-head); font-size: 0.7rem; font-weight: 700;
+               letter-spacing: 1px; color: var(--muted); }
+  .cat-win  { color: var(--green); }
+  .cat-loss { color: var(--red); opacity: 0.7; }
+  .cat-tie  { color: var(--muted); }
+  .matchup-week-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .week-tab {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+    font-family: var(--font-head); font-size: 0.78rem; font-weight: 700; letter-spacing: 1px;
+    padding: 0.3rem 0.75rem; border-radius: 4px; cursor: pointer; transition: all 0.2s;
+  }
+  .week-tab:hover { color: var(--text); border-color: var(--accent); }
+  .week-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* SCHEDULE STRENGTH */
+  .sched-bar-wrap { display: flex; align-items: center; gap: 0.5rem; min-width: 120px; }
+  .sched-bar { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+  .sched-bar-fill { height:100%; border-radius:4px; transition: width 0.4s; }
+  .sched-team-chips { display:flex; flex-wrap:wrap; gap:0.25rem; margin-top:0.35rem; }
+  .sched-chip {
+    font-size:0.65rem; font-family:var(--font-head); font-weight:700; letter-spacing:0.5px;
+    padding:0.1rem 0.35rem; border-radius:3px; background:var(--surface2);
+    border:1px solid var(--border); color:var(--muted);
+  }
+  .sched-chip.hot { border-color:var(--green); color:var(--green); }
+  .sched-chip.cold { border-color:var(--red); color:var(--red); opacity:0.7; }
+
   @media (max-width: 768px) {
     .grid-3 { grid-template-columns: 1fr 1fr; }
     nav button { font-size: 0.78rem; padding: 0.3rem 0.6rem; }
     .section-title { font-size: 1.4rem; }
+    .matchup-body { grid-template-columns: 1fr; }
+    .matchup-divider { flex-direction: row; border: none; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 0.5rem; }
   }
 </style>
 </head>
@@ -244,6 +318,8 @@
     <button onclick="showPage('keepers')">Keepers</button>
     <button onclick="showPage('waiver')">Waiver</button>
     <button onclick="showPage('league')">League</button>
+    <button onclick="showPage('matchups')">Matchups</button>
+    <button onclick="showPage('schedule')">Schedule</button>
     <button onclick="showPage('settings')">Settings</button>
   </nav>
   <div id="yahooAuthBtn" style="margin-left:1rem">
@@ -463,17 +539,104 @@
       <div id="leagueSelector" style="display:flex;gap:0.5rem;flex-wrap:wrap"></div>
     </div>
     <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">STANDINGS <span id="standingsLeagueName" style="font-weight:400;color:var(--muted);font-size:0.8rem"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+        <div class="card-title" style="margin-bottom:0">STANDINGS <span id="standingsLeagueName" style="font-weight:400;color:var(--muted);font-size:0.8rem"></span></div>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <span id="yahooSyncStatus" style="color:var(--muted);font-size:0.75rem"></span>
+          <button class="btn secondary" style="font-size:0.72rem;padding:0.25rem 0.6rem" onclick="syncYahooRosters()">⟳ Sync Rosters</button>
+          <button class="btn secondary" style="font-size:0.72rem;padding:0.25rem 0.6rem" onclick="loadStandings(selectedLeagueKey)">⟳ Standings</button>
+          <button class="btn secondary" style="font-size:0.72rem;padding:0.25rem 0.6rem;color:var(--muted)" onclick="showStandingsDebug()">⚙ Debug</button>
+        </div>
+      </div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>RANK</th><th>TEAM</th><th>MANAGER</th><th>W</th><th>L</th><th>T</th><th>PCT</th><th>STREAK</th><th>PF</th><th>PA</th></tr></thead>
           <tbody id="standingsTable"></tbody>
         </table>
       </div>
+      <!-- Debug panel — hidden by default -->
+      <div id="standingsDebugPanel" style="display:none;margin-top:1rem;padding:0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px">
+        <div style="font-family:var(--font-head);font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem">RAW YAHOO RESPONSE (for debugging standings issues):</div>
+        <pre id="standingsDebugContent" style="font-size:0.7rem;color:var(--gold);white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto"></pre>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">ALL ROSTERS <span id="rostersSubtitle" style="font-weight:400;color:var(--muted);font-size:0.8rem"></span></div>
       <div id="rostersGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-top:0.75rem"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MATCHUPS PAGE -->
+<div id="page-matchups" class="page">
+  <div class="section-title">MATCHUPS</div>
+  <div class="section-sub" id="matchupsSub">Live H2H category breakdown for the current week</div>
+
+  <div id="matchupsNotConnected" style="text-align:center;padding:3rem">
+    <div style="font-size:3rem;margin-bottom:1rem">🏀</div>
+    <div style="font-family:var(--font-head);font-weight:900;font-size:1.5rem;margin-bottom:0.5rem">CONNECT YAHOO TO VIEW MATCHUPS</div>
+    <button class="btn" style="background:#6001d3;font-size:1rem;padding:0.6rem 1.5rem" onclick="yahooLogin()">⚡ Connect Yahoo</button>
+  </div>
+
+  <div id="matchupsConnected" style="display:none">
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+      <div class="matchup-week-tabs" id="matchupWeekTabs"></div>
+      <button class="btn secondary" style="font-size:0.78rem;padding:0.3rem 0.8rem;margin-left:auto" onclick="loadMatchups()">⟳ Refresh</button>
+    </div>
+
+    <div id="matchupsLoading" class="loading" style="display:none">
+      <div class="spinner"></div><div>Loading matchups...</div>
+    </div>
+    <div id="matchupsGrid"></div>
+  </div>
+</div>
+
+<!-- SCHEDULE STRENGTH PAGE -->
+<div id="page-schedule" class="page">
+  <div class="section-title">SCHEDULE STRENGTH</div>
+  <div class="section-sub">Remaining NBA games by team — who has the easiest path to the finals?</div>
+
+  <div id="scheduleNotConnected" style="text-align:center;padding:3rem">
+    <div style="font-size:3rem;margin-bottom:1rem">📅</div>
+    <div style="font-family:var(--font-head);font-weight:900;font-size:1.5rem;margin-bottom:0.5rem">CONNECT YAHOO TO ANALYZE SCHEDULE</div>
+    <button class="btn" style="background:#6001d3;font-size:1rem;padding:0.6rem 1.5rem" onclick="yahooLogin()">⚡ Connect Yahoo</button>
+  </div>
+
+  <div id="scheduleConnected" style="display:none">
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center">
+      <button class="btn" onclick="loadScheduleStrength()">⟳ Refresh</button>
+      <span id="scheduleAsOf" style="color:var(--muted);font-size:0.78rem"></span>
+    </div>
+
+    <!-- Summary stat boxes -->
+    <div class="grid-3" id="schedSummary" style="margin-bottom:1.5rem"></div>
+
+    <!-- Main schedule table -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="card-title">FANTASY TEAM SCHEDULE RATINGS</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>RANK</th><th>TEAM</th><th>MANAGER</th>
+              <th title="Avg games per player this week">WK 20</th>
+              <th title="Avg games per player next week">WK 21</th>
+              <th title="Avg total remaining games per player">REMAINING</th>
+              <th title="Back-to-back exposure">B2B</th>
+              <th title="Composite schedule score">SCHED SCORE</th>
+              <th>NBA TEAMS ON ROSTER</th>
+            </tr>
+          </thead>
+          <tbody id="scheduleTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- NBA team games remaining reference -->
+    <div class="card">
+      <div class="card-title">NBA TEAM GAMES REMAINING (WKS 20–21)</div>
+      <div id="nbaTeamGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:0.5rem;margin-top:0.5rem"></div>
+      <p style="color:var(--muted);font-size:0.72rem;margin-top:0.75rem">* Schedule data for weeks 20–21 (March 9–22, 2026). Green = 4+ games this week.</p>
     </div>
   </div>
 </div>
@@ -931,6 +1094,10 @@ function buildPlayers() {
   PLAYERS = allRaw.map((p,i) => {
     const catScore=calcCatScore(p), dynastyScore=calcDynastyScore(p), overall=calcOverall(p);
     const risk=getRiskLabel(p[0]), riskPenalty=getRiskPenalty(p[0]), riskFlag=RISK_FLAGS[p[0]];
+    // Pull injury status from Yahoo live data if available
+    const live = liveStatsLoaded ? liveStatsMap[_normName(p[0])] : null;
+    const injStatus = live?.status || '';
+    const isInjured = live ? (live.is_injured || false) : false;
     return {id:i,name:p[0],pos:p[1],age:p[2],
       pts:p[3],reb:p[4],ast:p[5],threepm:p[6],
       stl:p[7],blk:p[8],to:p[9],fgm:p[10],ftm:p[11],
@@ -938,7 +1105,8 @@ function buildPlayers() {
       catScore:Math.round(catScore*10)/10,
       dynastyScore:Math.round(dynastyScore),
       overall,risk,riskPenalty,
-      riskNote:riskFlag?riskFlag.note:null};
+      riskNote:riskFlag?riskFlag.note:null,
+      injStatus, isInjured};
   });
   PLAYERS.sort((a,b)=>(b.overall-a.overall)||(b.catScore-a.catScore)||(b.dynastyScore-a.dynastyScore));
   PLAYERS.forEach((p,i)=>p.rank=i+1);
@@ -979,9 +1147,12 @@ function renderTable() {
     const riskBadge = p.risk
       ? `<span style="display:inline-block;font-size:0.65rem;font-family:var(--font-head);font-weight:700;color:${p.risk.color};border:1px solid ${p.risk.color};border-radius:3px;padding:0.05rem 0.3rem;margin-left:0.3rem" title="${p.riskNote||''}">${p.risk.label}</span>`
       : '';
+    const injBadge = p.isInjured && p.injStatus
+      ? `<span style="display:inline-block;background:var(--red);color:white;font-size:0.65rem;font-family:var(--font-head);font-weight:700;padding:0.05rem 0.3rem;border-radius:3px;margin-left:0.3rem;letter-spacing:0.5px" title="${p.rosterNote||p.injStatus}">${p.injStatus}</span>`
+      : '';
     return `<tr class="${isOwned ? 'owned' : ''}">
       <td><span class="rank-badge ${rankClass}">${p.rank}</span></td>
-      <td><strong>${p.name}</strong>${riskBadge}</td>
+      <td><strong>${p.name}</strong>${injBadge}${riskBadge}</td>
       <td style="color:var(--muted)">${p.pos}</td>
       <td style="color:${p.age <= 24 ? 'var(--green)' : p.age >= 34 ? 'var(--red)' : 'var(--muted)'}">${p.age}</td>
       <td>
@@ -1465,29 +1636,44 @@ async function selectLeague(leagueKey, leagueName) {
 }
 
 async function loadStandings(leagueKey) {
+  leagueKey = leagueKey || selectedLeagueKey;
+  if (!leagueKey) return;
   const tbody = document.getElementById('standingsTable');
-  if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="color:var(--muted);padding:1rem">Loading standings...</td></tr>`;
+  if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="color:var(--muted);padding:1rem;text-align:center">
+    <div style="width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block;margin-right:0.5rem;vertical-align:middle"></div>
+    Loading standings...
+  </td></tr>`;
   try {
     const r = await fetch(`${SERVER}/api/yahoo/league/${leagueKey}/standings?t=${Date.now()}`, { credentials: 'include' });
     const d = await r.json();
     if (!tbody) return;
 
-    // Show league name + season
     const lbl = document.getElementById('standingsLeagueName');
     if (lbl && d.name) lbl.textContent = `· ${d.name} ${d.season||''}`;
 
+    // Store current week for matchups page
+    if (d.current_week) {
+      currentMatchupWeek = parseInt(d.current_week);
+      matchupWeekRange = Array.from({length: Math.min(currentMatchupWeek, 21)}, (_,i) => i+1);
+    }
+
     if (d.error || !d.teams || d.teams.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="color:var(--red);padding:1rem">
-        ${d.error||'No standings data'} ${d.detail ? '— '+d.detail : ''}
-        <br><small style="color:var(--muted)">${d.raw||''}</small>
+      // Show full error with trace for debugging
+      tbody.innerHTML = `<tr><td colspan="10" style="padding:1rem">
+        <div style="color:var(--red);font-weight:600;margin-bottom:0.5rem">
+          ✗ ${d.error||'No standings data'}${d.detail ? ' — '+d.detail : ''}
+        </div>
+        ${d.trace ? `<pre style="font-size:0.65rem;color:var(--muted);white-space:pre-wrap;max-height:120px;overflow:auto">${d.trace}</pre>` : ''}
+        ${d.raw ? `<pre style="font-size:0.65rem;color:var(--gold);white-space:pre-wrap;max-height:120px;overflow:auto">${d.raw}</pre>` : ''}
+        <div style="margin-top:0.5rem;font-size:0.75rem;color:var(--muted)">Click ⚙ Debug above to see full Yahoo response</div>
       </td></tr>`;
       return;
     }
 
-    const isCats = (d.scoring_type||'').includes('head') || d.teams[0]?.scoring_type?.includes('head');
     tbody.innerHTML = d.teams.map(t => {
-      const rankClass = t.rank <= 3 ? 'top10' : t.rank <= 5 ? 'top25' : '';
+      const rankClass = t.rank === 1 ? 'top10' : t.rank <= 3 ? 'top25' : '';
       const streakColor = (t.streak||'').startsWith('W') ? 'var(--green)' : (t.streak||'').startsWith('L') ? 'var(--red)' : 'var(--muted)';
+      const pctDisplay = t.pct != null ? (parseFloat(t.pct) < 2 ? (parseFloat(t.pct)*100).toFixed(1)+'%' : parseFloat(t.pct).toFixed(1)+'%') : '—';
       return `<tr>
         <td><span class="rank-badge ${rankClass}">${t.rank||'—'}</span></td>
         <td><strong>${t.name}</strong></td>
@@ -1495,7 +1681,7 @@ async function loadStandings(leagueKey) {
         <td style="color:var(--green)">${t.wins??'—'}</td>
         <td style="color:var(--red)">${t.losses??'—'}</td>
         <td style="color:var(--muted)">${t.ties??'—'}</td>
-        <td>${t.pct ? (parseFloat(t.pct)*100).toFixed(1)+'%' : '—'}</td>
+        <td>${pctDisplay}</td>
         <td style="color:${streakColor}">${t.streak||'—'}</td>
         <td style="color:var(--muted)">${t.points_for??'—'}</td>
         <td style="color:var(--muted)">${t.points_against??'—'}</td>
@@ -1503,6 +1689,22 @@ async function loadStandings(leagueKey) {
     }).join('');
   } catch(e) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="color:var(--red);padding:1rem">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function showStandingsDebug() {
+  const panel = document.getElementById('standingsDebugPanel');
+  const content = document.getElementById('standingsDebugContent');
+  if (!selectedLeagueKey) { showToast('Select a league first'); return; }
+  if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  if (content) content.textContent = 'Loading raw Yahoo response...';
+  try {
+    const r = await fetch(`${SERVER}/api/yahoo/league/${selectedLeagueKey}/debug/standings`, { credentials: 'include' });
+    const d = await r.json();
+    if (content) content.textContent = d.annotated || d.raw_json || JSON.stringify(d, null, 2);
+  } catch(e) {
+    if (content) content.textContent = 'Error: ' + e.message;
   }
 }
 
@@ -1549,19 +1751,28 @@ async function syncYahooRosters(leagueKey) {
     if (d.error) { showToast('Roster sync failed: ' + d.error); return; }
     owned.clear();
     yahooRosterMap = {};
-    _playerNormMap = null; // reset so it rebuilds with latest PLAYERS
+    _playerNormMap = null;
     const rosters = d.rosters || [];
     let matched = 0, unmatched = [];
     rosters.forEach(team => {
       (team.players || []).forEach(p => {
-        yahooRosterMap[normName(p.name)] = {
+        const normKey = normName(p.name);
+        yahooRosterMap[normKey] = {
           teamName: team.name, manager: team.manager,
-          slot: p.slot, status: p.status, injuryNote: p.injury_note,
+          slot: p.slot, status: p.status,
+          isInjured: p.is_injured || false,
+          injuryNote: p.injury_note,
           teamKey: team.team_key,
         };
         const match = findPlayerByName(p.name);
-        if (match) { owned.add(match.id); matched++; }
-        else unmatched.push(p.name);
+        if (match) {
+          owned.add(match.id);
+          // Push live injury status onto the player object
+          match.injStatus = p.status || '';
+          match.isInjured = p.is_injured || false;
+          match.rosterNote = p.injury_note || '';
+          matched++;
+        } else unmatched.push(p.name);
       });
     });
     if (unmatched.length) console.log('Unmatched Yahoo players:', unmatched);
@@ -1605,6 +1816,265 @@ function renderRostersGrid(rosters) {
     loadYahooLeagues();
   }
 })();
+
+// =============================================
+// MATCHUPS
+// =============================================
+const CAT_ORDER = ['pts','reb','ast','threepm','stl','blk','to','fgm','ftm','dd','td'];
+const CAT_LABELS = {pts:'PTS',reb:'REB',ast:'AST',threepm:'3PM',stl:'STL',blk:'BLK',to:'TO',fgm:'FGM',ftm:'FTM',dd:'DD',td:'TD'};
+const CAT_TO = new Set(['to']); // lower is better
+
+let currentMatchupWeek = null;
+let matchupWeekRange = [];
+
+async function initMatchupsPage() {
+  if (!selectedLeagueKey) { showToast('Select a league on the League tab first'); return; }
+  document.getElementById('matchupsNotConnected').style.display = 'none';
+  document.getElementById('matchupsConnected').style.display = 'block';
+  // Build week tabs — weeks 1 through current
+  if (!matchupWeekRange.length) {
+    // Use current week from league info (we got it from standings)
+    const curWeek = parseInt(currentMatchupWeek || 20);
+    matchupWeekRange = Array.from({length: Math.min(curWeek, 21)}, (_,i) => i+1);
+  }
+  const tabsEl = document.getElementById('matchupWeekTabs');
+  const curWeek = parseInt(currentMatchupWeek || 20);
+  tabsEl.innerHTML = matchupWeekRange.slice(-6).map(w =>
+    `<button class="week-tab ${w===curWeek?'active':''}" onclick="loadMatchups(${w})">${w===curWeek?'WK '+w+' (NOW)':'WK '+w}</button>`
+  ).join('');
+  await loadMatchups(curWeek);
+}
+
+async function loadMatchups(week) {
+  if (!selectedLeagueKey) return;
+  currentMatchupWeek = week || currentMatchupWeek;
+  // Update tab highlight
+  document.querySelectorAll('.week-tab').forEach(b => {
+    b.classList.toggle('active', b.textContent.includes('WK '+(week||currentMatchupWeek)));
+  });
+  const grid = document.getElementById('matchupsGrid');
+  const loading = document.getElementById('matchupsLoading');
+  if (loading) loading.style.display = 'block';
+  if (grid) grid.innerHTML = '';
+  try {
+    const weekParam = week ? `?week=${week}` : '';
+    const r = await fetch(`${SERVER}/api/yahoo/league/${selectedLeagueKey}/scoreboard${weekParam}`, {credentials:'include'});
+    const d = await r.json();
+    if (loading) loading.style.display = 'none';
+    if (d.error) {
+      if (grid) grid.innerHTML = `<div class="card" style="padding:1.5rem;color:var(--red)">Error: ${d.error} — ${d.detail||''}</div>`;
+      return;
+    }
+    const sub = document.getElementById('matchupsSub');
+    if (sub) sub.textContent = `Week ${d.week} · ${d.league_name} · ${d.season||''}`;
+    if (!d.matchups || d.matchups.length === 0) {
+      if (grid) grid.innerHTML = `<div class="card" style="padding:1.5rem;color:var(--muted)">No matchup data found for this week.</div>`;
+      return;
+    }
+    if (grid) grid.innerHTML = d.matchups.map(m => renderMatchupCard(m)).join('');
+  } catch(e) {
+    if (loading) loading.style.display = 'none';
+    if (grid) grid.innerHTML = `<div class="card" style="padding:1.5rem;color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+function fmtStat(val, cat) {
+  if (val == null) return '—';
+  if (cat === 'dd' || cat === 'td') return val.toFixed(0);
+  if (Number.isInteger(val)) return val;
+  return parseFloat(val).toFixed(1);
+}
+
+function renderMatchupCard(m) {
+  const t1 = m.team1, t2 = m.team2;
+  const cr = m.cat_result || {};
+  const score = m.score || {t1:0,t2:0,ties:0};
+  const t1Ahead = score.t1 > score.t2;
+  const t2Ahead = score.t2 > score.t1;
+  const tied    = score.t1 === score.t2;
+
+  const statusBadge = m.status === 'postevent'
+    ? `<span style="color:var(--muted);font-size:0.72rem">FINAL</span>`
+    : `<span style="color:var(--green);font-size:0.72rem">● LIVE</span>`;
+
+  const catRows = CAT_ORDER.map(cat => {
+    const v1 = t1.stats?.[cat], v2 = t2.stats?.[cat];
+    const res = cr[cat] || 0;
+    const cls1 = res === 1 ? 'cat-win' : res === -1 ? 'cat-loss' : 'cat-tie';
+    const cls2 = res === -1 ? 'cat-win' : res === 1 ? 'cat-loss' : 'cat-tie';
+    return `<div class="cat-row">
+      <div class="cat-val-left ${cls1}">${fmtStat(v1,cat)}</div>
+      <div class="cat-label">${CAT_LABELS[cat]||cat.toUpperCase()}</div>
+      <div class="cat-val-right ${cls2}">${fmtStat(v2,cat)}</div>
+    </div>`;
+  }).join('');
+
+  const scoreColor1 = t1Ahead ? 'var(--green)' : t2Ahead ? 'var(--red)' : 'var(--muted)';
+  const scoreColor2 = t2Ahead ? 'var(--green)' : t1Ahead ? 'var(--red)' : 'var(--muted)';
+  const winnerNote = t1Ahead ? `<span style="color:var(--green);font-size:0.7rem;font-family:var(--font-head);font-weight:700">▲ LEADING</span>`
+                   : t2Ahead ? `<span style="color:var(--muted);font-size:0.7rem"> </span>` : '';
+  const winnerNote2= t2Ahead ? `<span style="color:var(--green);font-size:0.7rem;font-family:var(--font-head);font-weight:700">▲ LEADING</span>` : '';
+
+  return `<div class="matchup-card">
+    <div class="matchup-header">
+      <span>WEEK ${m.week}</span>
+      ${statusBadge}
+    </div>
+    <div class="matchup-body">
+      <div class="matchup-team ${t1Ahead?'winner':t2Ahead?'loser':''}">
+        <div class="matchup-team-name">${t1.name||'—'}</div>
+        <div class="matchup-manager">${t1.manager||''} ${winnerNote}</div>
+        <div class="matchup-score-big" style="color:${scoreColor1}">${score.t1}</div>
+        <div class="matchup-score-lbl">CATS WON</div>
+        <div class="cat-rows">${catRows.split('</div>').map((row,i) => {
+          // Extract just the left value side per row — rebuild below
+          return '';
+        }).join('')}</div>
+      </div>
+      <div class="matchup-divider">
+        <span class="matchup-vs">VS</span>
+        <span style="font-family:var(--font-head);font-size:0.7rem;color:var(--muted);writing-mode:vertical-lr;transform:rotate(180deg)">${score.ties} TIED</span>
+      </div>
+      <div class="matchup-team ${t2Ahead?'winner':t1Ahead?'loser':''}">
+        <div class="matchup-team-name" style="text-align:right">${t2.name||'—'}</div>
+        <div class="matchup-manager" style="text-align:right">${winnerNote2} ${t2.manager||''}</div>
+        <div class="matchup-score-big" style="color:${scoreColor2};text-align:right">${score.t2}</div>
+        <div class="matchup-score-lbl" style="text-align:right">CATS WON</div>
+      </div>
+    </div>
+    <!-- Full cat breakdown below teams -->
+    <div style="padding:0 1.25rem 1rem;border-top:1px solid var(--border);margin-top:0.25rem">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.15rem;margin-top:0.75rem">
+        ${CAT_ORDER.map(cat => {
+          const v1 = t1.stats?.[cat], v2 = t2.stats?.[cat];
+          const res = cr[cat] || 0;
+          const cls1 = res === 1 ? 'cat-win' : res === -1 ? 'cat-loss' : 'cat-tie';
+          const cls2 = res === -1 ? 'cat-win' : res === 1 ? 'cat-loss' : 'cat-tie';
+          const bg = res === 1 ? 'rgba(34,197,94,0.06)' : res === -1 ? 'rgba(239,68,68,0.06)' : 'transparent';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.3rem 0.6rem;background:${bg};border-radius:4px">
+            <span class="${cls1}" style="font-weight:700;min-width:40px;text-align:right;font-size:0.82rem">${fmtStat(v1,cat)}</span>
+            <span style="font-family:var(--font-head);font-size:0.7rem;font-weight:700;letter-spacing:1px;color:var(--muted);margin:0 0.4rem">${CAT_LABELS[cat]||cat.toUpperCase()}</span>
+            <span class="${cls2}" style="font-weight:700;min-width:40px;font-size:0.82rem">${fmtStat(v2,cat)}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// =============================================
+// SCHEDULE STRENGTH
+// =============================================
+async function loadScheduleStrength() {
+  if (!selectedLeagueKey) { showToast('Select a league on the League tab first'); return; }
+  document.getElementById('scheduleNotConnected').style.display = 'none';
+  document.getElementById('scheduleConnected').style.display = 'block';
+  const tbody = document.getElementById('scheduleTable');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="padding:1.5rem;color:var(--muted);text-align:center">
+    <div style="display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:0.5rem"></div>
+    Analyzing schedules...
+  </td></tr>`;
+  try {
+    const r = await fetch(`${SERVER}/api/yahoo/league/${selectedLeagueKey}/schedule_strength`, {credentials:'include'});
+    const d = await r.json();
+    if (d.error) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red);padding:1rem">${d.error}</td></tr>`;
+      return;
+    }
+    const asOf = document.getElementById('scheduleAsOf');
+    if (asOf) asOf.textContent = `Data as of ${d.as_of}`;
+
+    const teams = d.teams || [];
+    const maxScore = Math.max(...teams.map(t=>t.schedule_score||0));
+    const minScore = Math.min(...teams.map(t=>t.schedule_score||0));
+
+    // Summary boxes
+    const best = teams[0], worst = teams[teams.length-1];
+    const summary = document.getElementById('schedSummary');
+    if (summary) summary.innerHTML = `
+      <div class="card stat-box"><div class="stat-val" style="color:var(--green)">${best?.name?.split(' ')[0]||'—'}</div><div class="stat-lbl">Best Schedule</div></div>
+      <div class="card stat-box"><div class="stat-val" style="color:var(--red)">${worst?.name?.split(' ')[0]||'—'}</div><div class="stat-lbl">Toughest Schedule</div></div>
+      <div class="card stat-box"><div class="stat-val">${teams.length}</div><div class="stat-lbl">Teams Analyzed</div></div>
+    `;
+
+    // Main table
+    if (tbody) tbody.innerHTML = teams.map(t => {
+      const pct = maxScore > minScore ? ((t.schedule_score - minScore)/(maxScore - minScore)*100) : 50;
+      const barColor = pct > 66 ? 'var(--green)' : pct > 33 ? 'var(--gold)' : 'var(--red)';
+      const rankClass = t.rank === 1 ? 'top10' : t.rank <= 3 ? 'top25' : '';
+      // NBA team chips — sort by games this week desc
+      const nbaTeams = Object.entries(t.nba_teams||{}).sort((a,b)=>b[1]-a[1]);
+      const chips = nbaTeams.slice(0,8).map(([abbr, cnt]) => {
+        const sched = NBA_SCHED_CLIENT[abbr] || {tw:3};
+        const cls = sched.tw >= 4 ? 'hot' : sched.tw <= 2 ? 'cold' : '';
+        return `<span class="sched-chip ${cls}">${abbr}${cnt>1?'×'+cnt:''}</span>`;
+      }).join('');
+      return `<tr>
+        <td><span class="rank-badge ${rankClass}">${t.rank}</span></td>
+        <td><strong>${t.name}</strong></td>
+        <td style="color:var(--muted)">${t.manager}</td>
+        <td style="color:${t.this_week_games>=3.5?'var(--green)':t.this_week_games<=2.8?'var(--red)':'var(--text)'};font-weight:700">${t.this_week_games.toFixed(1)}</td>
+        <td style="color:${t.next_week_games>=3.5?'var(--green)':t.next_week_games<=2.8?'var(--red)':'var(--text)'}">${t.next_week_games.toFixed(1)}</td>
+        <td>${t.remaining_games.toFixed(1)}</td>
+        <td style="color:${t.b2b_exposure>0.5?'var(--gold)':'var(--muted)'}">${t.b2b_exposure.toFixed(2)}</td>
+        <td>
+          <div class="sched-bar-wrap">
+            <div class="sched-bar"><div class="sched-bar-fill" style="width:${pct.toFixed(0)}%;background:${barColor}"></div></div>
+            <span style="font-family:var(--font-head);font-weight:700;font-size:0.88rem;min-width:32px;text-align:right;color:${barColor}">${t.schedule_score.toFixed(0)}</span>
+          </div>
+        </td>
+        <td><div class="sched-team-chips">${chips}</div></td>
+      </tr>`;
+    }).join('');
+
+    // NBA team grid
+    renderNBATeamGrid();
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red);padding:1rem">Error: ${e.message}</td></tr>`;
+  }
+}
+
+// Client-side copy of schedule data for chips
+const NBA_SCHED_CLIENT = {
+  "ATL":{"tw":4,"nw":3},"BOS":{"tw":3,"nw":4},"BKN":{"tw":4,"nw":3},"CHA":{"tw":3,"nw":4},
+  "CHI":{"tw":4,"nw":3},"CLE":{"tw":3,"nw":3},"DAL":{"tw":3,"nw":4},"DEN":{"tw":4,"nw":3},
+  "DET":{"tw":3,"nw":4},"GSW":{"tw":4,"nw":3},"HOU":{"tw":3,"nw":4},"IND":{"tw":4,"nw":3},
+  "LAC":{"tw":3,"nw":3},"LAL":{"tw":4,"nw":3},"MEM":{"tw":3,"nw":4},"MIA":{"tw":4,"nw":3},
+  "MIL":{"tw":3,"nw":4},"MIN":{"tw":4,"nw":3},"NOP":{"tw":3,"nw":3},"NYK":{"tw":4,"nw":3},
+  "OKC":{"tw":3,"nw":4},"ORL":{"tw":4,"nw":3},"PHI":{"tw":3,"nw":4},"PHX":{"tw":4,"nw":3},
+  "POR":{"tw":3,"nw":3},"SAC":{"tw":4,"nw":3},"SAS":{"tw":3,"nw":4},"TOR":{"tw":4,"nw":3},
+  "UTA":{"tw":3,"nw":4},"WAS":{"tw":4,"nw":3}
+};
+
+function renderNBATeamGrid() {
+  const el = document.getElementById('nbaTeamGrid');
+  if (!el) return;
+  const sorted = Object.entries(NBA_SCHED_CLIENT).sort((a,b) => (b[1].tw+b[1].nw)-(a[1].tw+a[1].nw));
+  el.innerHTML = sorted.map(([abbr, s]) => {
+    const hot = s.tw >= 4;
+    const cold = s.tw <= 2;
+    const border = hot ? 'var(--green)' : cold ? 'var(--red)' : 'var(--border)';
+    const color  = hot ? 'var(--green)' : cold ? 'var(--red)' : 'var(--text)';
+    return `<div style="background:var(--surface2);border:1px solid ${border};border-radius:6px;padding:0.5rem 0.75rem;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-family:var(--font-head);font-weight:700;color:${color}">${abbr}</span>
+      <span style="font-size:0.75rem;color:var(--muted)">
+        <span style="color:${color};font-weight:700">${s.tw}</span>/<span>${s.nw}</span>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+// Hook into showPage to auto-load these pages
+const _origShowPage = showPage;
+function showPage(id) {
+  _origShowPage(id);
+  if (id === 'matchups' && selectedLeagueKey && document.getElementById('matchupsGrid').innerHTML === '') {
+    initMatchupsPage();
+  }
+  if (id === 'schedule' && selectedLeagueKey && document.getElementById('scheduleTable').innerHTML === '') {
+    loadScheduleStrength();
+  }
+}
 
 // =============================================
 // INIT

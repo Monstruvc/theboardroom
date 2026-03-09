@@ -450,6 +450,7 @@ def yahoo_standings(lk):
         teams.sort(key=lambda x:x.get("rank") or 99)
         return jsonify({"teams":teams,"scoring_type":scoring_type,
                         "season":league_info.get("season"),"name":league_info.get("name",""),
+                        "current_week":league_info.get("current_week"),
                         "is_finished":league_info.get("is_finished",0)})
     except Exception as e:
         return jsonify({"error":"parse_error","detail":str(e),
@@ -521,6 +522,241 @@ def yahoo_my_team(lk):
         return jsonify({"team_key":my_key,"team_name":my_name,"players":players,"count":len(players)})
     except Exception as e:
         return jsonify({"error":"parse_error","detail":str(e),"trace":traceback.format_exc()[-800:]}),500
+
+# ── Scoreboard / Matchups ──────────────────────────────────────────────────────
+# Stat IDs from your league's debug output:
+# 4=FGM  7=FTM  10=3PTM  12=PTS  15=AST  16=REB  17=STL  18=BLK  19=TO  27=DD  28=TD
+SCOREBOARD_STAT_MAP = {
+    "4":"fgm","7":"ftm","10":"threepm","12":"pts","16":"reb",
+    "15":"ast","17":"stl","18":"blk","19":"to","27":"dd","28":"td"
+}
+# Lower is better for TO
+TO_CATS = {"to"}
+
+def _parse_matchup_team(team_data):
+    """Parse one side of a matchup — info + live cat totals."""
+    if not isinstance(team_data, list) or len(team_data) < 2:
+        return {}
+    info = _merge(team_data[0]) if isinstance(team_data[0], list) else team_data[0]
+    name = info.get("name","")
+    mgr  = _extract_manager(info.get("managers"))
+    team_key = info.get("team_key","")
+
+    # Walk remaining entries for team_stats
+    stats = {}
+    for chunk in team_data[1:]:
+        if not isinstance(chunk, dict): continue
+        ts = chunk.get("team_stats") or _find_key(chunk, "team_stats")
+        if not ts: continue
+        stat_list = ts.get("stats", {})
+        if isinstance(stat_list, dict): stat_list = stat_list.get("stat", [])
+        if isinstance(stat_list, dict): stat_list = [stat_list]
+        for s in stat_list:
+            if not isinstance(s, dict): continue
+            sid  = str(s.get("stat_id",""))
+            val  = s.get("value","")
+            key  = SCOREBOARD_STAT_MAP.get(sid)
+            if key:
+                try: stats[key] = float(val) if val not in ("","—","-") else None
+                except: stats[key] = None
+
+    # Win/projected points from team_points if present
+    pts_total = None
+    for chunk in team_data[1:]:
+        if not isinstance(chunk, dict): continue
+        tp = chunk.get("team_points") or _find_key(chunk,"team_points")
+        if tp and isinstance(tp, dict):
+            try: pts_total = float(tp.get("total","") or 0) or None
+            except: pass
+        # team_remaining_games
+    win_prob = None
+    for chunk in team_data[1:]:
+        if not isinstance(chunk, dict): continue
+        wp = _find_key(chunk, "win_probability")
+        if wp is not None:
+            try: win_prob = float(wp)
+            except: pass
+
+    return {"team_key": team_key, "name": name, "manager": mgr,
+            "stats": stats, "pts_total": pts_total, "win_prob": win_prob}
+
+def _score_matchup_cats(t1_stats, t2_stats):
+    """Return per-cat winner: {cat: 1 (t1 wins), -1 (t2 wins), 0 (tie)}."""
+    cats = set(list(t1_stats.keys()) + list(t2_stats.keys()))
+    result = {}
+    for cat in cats:
+        v1 = t1_stats.get(cat)
+        v2 = t2_stats.get(cat)
+        if v1 is None or v2 is None: result[cat] = 0; continue
+        if cat in TO_CATS:
+            result[cat] = 1 if v1 < v2 else (-1 if v1 > v2 else 0)
+        else:
+            result[cat] = 1 if v1 > v2 else (-1 if v1 < v2 else 0)
+    return result
+
+@app.route("/api/yahoo/league/<lk>/scoreboard")
+def yahoo_scoreboard(lk):
+    week = request.args.get("week","")
+    week_param = f";week={week}" if week else ""
+    data = _yahoo(f"/league/{lk}/scoreboard{week_param}", cache=False)
+    if "error" in data: return jsonify(data), 401
+    try:
+        league_list = data["fantasy_content"]["league"]
+        league_info = _merge(league_list[0]) if isinstance(league_list[0],list) else league_list[0]
+        current_week = league_info.get("current_week") or league_info.get("matchup_week","")
+
+        # Find scoreboard → matchups
+        scoreboard = None
+        for item in league_list:
+            if isinstance(item, dict) and "scoreboard" in item:
+                scoreboard = item["scoreboard"]; break
+        if not scoreboard:
+            scoreboard = _find_key(league_list, "scoreboard") or {}
+
+        # matchups list
+        matchups_raw = scoreboard.get("0",{}).get("matchups") or _find_key(scoreboard,"matchups") or {}
+        count = matchups_raw.get("count",0) if isinstance(matchups_raw,dict) else 0
+
+        matchups = []
+        for i in range(count):
+            m_entry = matchups_raw.get(str(i),{}).get("matchup",{})
+            if not m_entry: continue
+            week_val = m_entry.get("week","")
+            status   = m_entry.get("status","")
+            # teams inside matchup — keyed "0"→team, "1"→team
+            teams_section = m_entry.get("teams") or _find_key(m_entry,"teams") or {}
+            t_list = []
+            for j in range(teams_section.get("count",2) if isinstance(teams_section,dict) else 2):
+                te = teams_section.get(str(j),{}).get("team")
+                if te: t_list.append(_parse_matchup_team(te))
+            if len(t_list) < 2: continue
+
+            cat_result = _score_matchup_cats(t_list[0]["stats"], t_list[1]["stats"])
+            t1_wins = sum(1 for v in cat_result.values() if v == 1)
+            t2_wins = sum(1 for v in cat_result.values() if v == -1)
+            ties    = sum(1 for v in cat_result.values() if v == 0)
+
+            matchups.append({
+                "week": week_val or current_week,
+                "status": status,
+                "team1": t_list[0],
+                "team2": t_list[1],
+                "cat_result": cat_result,
+                "score": {"t1": t1_wins, "t2": t2_wins, "ties": ties}
+            })
+
+        return jsonify({"matchups": matchups, "week": current_week,
+                        "season": league_info.get("season",""),
+                        "league_name": league_info.get("name","")})
+    except Exception as e:
+        return jsonify({"error":"parse_error","detail":str(e),
+                        "trace":traceback.format_exc()[-1000:],
+                        "raw":str(data)[:1000]}), 500
+
+@app.route("/api/yahoo/league/<lk>/debug/scoreboard")
+def debug_scoreboard(lk):
+    week = request.args.get("week","")
+    week_param = f";week={week}" if week else ""
+    data = _yahoo(f"/league/{lk}/scoreboard{week_param}", cache=False)
+    if "error" in data: return jsonify(data), 401
+    raw = data.get("fantasy_content",{}).get("league",[])
+    return jsonify({"annotated": _annotate(raw), "raw_json": str(raw)[:8000]})
+
+# ── Schedule Strength ──────────────────────────────────────────────────────────
+# NBA 2025-26 remaining games per team — week buckets
+# Games per team for weeks 20-21 (final stretch, March 9 - March 22 2026)
+# Source: NBA schedule. Teams with back-to-backs this week get higher scores.
+# Format: abbr → {this_week, next_week, remaining, b2b_this_week}
+NBA_SCHEDULE = {
+    # Team: {tw=this week games, nw=next week games, rem=total remaining, b2b=back2backs this week}
+    "ATL": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "BOS": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "BKN": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "CHA": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "CHI": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "CLE": {"tw":3,"nw":3,"rem":6,"b2b":0},
+    "DAL": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "DEN": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "DET": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "GSW": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "HOU": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "IND": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "LAC": {"tw":3,"nw":3,"rem":6,"b2b":0},
+    "LAL": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "MEM": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "MIA": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "MIL": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "MIN": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "NOP": {"tw":3,"nw":3,"rem":6,"b2b":0},
+    "NYK": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "OKC": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "ORL": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "PHI": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "PHX": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "POR": {"tw":3,"nw":3,"rem":6,"b2b":0},
+    "SAC": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "SAS": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "TOR": {"tw":4,"nw":3,"rem":7,"b2b":1},
+    "UTA": {"tw":3,"nw":4,"rem":7,"b2b":0},
+    "WAS": {"tw":4,"nw":3,"rem":7,"b2b":1},
+}
+
+@app.route("/api/yahoo/league/<lk>/schedule_strength")
+def schedule_strength(lk):
+    """For each fantasy team, compute schedule strength based on roster team affiliations."""
+    data = _yahoo(f"/league/{lk}/teams/roster/players", cache=False)
+    if "error" in data: return jsonify(data), 401
+    try:
+        league_list = data["fantasy_content"]["league"]
+        teams_raw = _find_in_list(league_list, "teams")
+        if not teams_raw: return jsonify({"error":"no_teams"}), 500
+
+        results = []
+        for i in range(teams_raw.get("count",0)):
+            t = teams_raw[str(i)]["team"]
+            info = _merge(t[0]) if isinstance(t[0],list) else t[0]
+            mgr_name = _extract_manager(info.get("managers"))
+            team_data = t[1] if len(t)>1 else {}
+            roster_section = team_data.get("roster",{})
+            players_raw = roster_section.get("0",{}).get("players",{})
+            if not players_raw:
+                for v in roster_section.values():
+                    if isinstance(v,dict) and "players" in v: players_raw=v["players"]; break
+
+            # Gather NBA team abbrs for this fantasy roster
+            nba_teams = {}
+            for j in range(players_raw.get("count",0)):
+                p_raw = players_raw[str(j)]["player"]
+                p = _parse_player_roster(p_raw)
+                abbr = (p.get("team") or "").upper()
+                if abbr and abbr not in ("FA","","INJ"):
+                    nba_teams[abbr] = nba_teams.get(abbr,0) + 1
+
+            # Compute schedule scores
+            tw_total = sum(NBA_SCHEDULE.get(a,{}).get("tw",3)*cnt for a,cnt in nba_teams.items())
+            nw_total = sum(NBA_SCHEDULE.get(a,{}).get("nw",3)*cnt for a,cnt in nba_teams.items())
+            rem_total= sum(NBA_SCHEDULE.get(a,{}).get("rem",6)*cnt for a,cnt in nba_teams.items())
+            b2b_total= sum(NBA_SCHEDULE.get(a,{}).get("b2b",0)*cnt for a,cnt in nba_teams.items())
+            player_count = sum(nba_teams.values())
+
+            results.append({
+                "team_key": info.get("team_key",""),
+                "name": info.get("name",""),
+                "manager": mgr_name,
+                "nba_teams": nba_teams,
+                "player_count": player_count,
+                "this_week_games": round(tw_total/max(player_count,1),2),
+                "next_week_games": round(nw_total/max(player_count,1),2),
+                "remaining_games": round(rem_total/max(player_count,1),2),
+                "b2b_exposure": round(b2b_total/max(player_count,1),2),
+                "schedule_score": round((tw_total*2 + nw_total + rem_total*0.5)/max(player_count,1),1),
+            })
+
+        results.sort(key=lambda x: -x["schedule_score"])
+        for i,r in enumerate(results): r["rank"] = i+1
+        return jsonify({"teams": results, "as_of": datetime.now().strftime("%Y-%m-%d")})
+    except Exception as e:
+        return jsonify({"error":"parse_error","detail":str(e),"trace":traceback.format_exc()[-800:]}), 500
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))

@@ -476,44 +476,82 @@
 
 <!-- WAIVER PAGE -->
 <div id="page-waiver" class="page">
-  <div class="section-title">WAIVER WIRE ADVISOR</div>
-  <div class="section-sub">Find the best available players based on your team's category needs</div>
+  <div class="section-title">WAIVER WIRE</div>
+  <div class="section-sub">Hidden gems, handcuff plays, and schedule-based streamers — not the stars already on someone's team</div>
 
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">YOUR WEAKEST CATEGORIES</div>
-      <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.75rem">Run Category Balance first, or manually select your needs:</p>
-      <div id="waiverNeedToggles" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem"></div>
-      <button class="btn" onclick="runWaiverAdvisor()">Find Waiver Targets</button>
-    </div>
-    <div class="card">
-      <div class="card-title">FILTERS</div>
-      <div style="display:flex;flex-direction:column;gap:0.75rem">
-        <div>
-          <label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:0.25rem">POSITION NEED</label>
-          <select id="waiverPosFilter" style="width:100%">
-            <option value="">Any Position</option>
-            <option value="PG">PG</option><option value="SG">SG</option>
-            <option value="SF">SF</option><option value="PF">PF</option><option value="C">C</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:0.78rem;color:var(--muted);display:block;margin-bottom:0.25rem">MIN OVERALL SCORE</label>
-          <select id="waiverMinScore">
-            <option value="0">Any</option><option value="50">50+</option>
-            <option value="60">60+</option><option value="70">70+</option>
-          </select>
-        </div>
+  <!-- Filter bar -->
+  <div class="card" style="margin-bottom:1rem">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.75rem;align-items:end">
+      <div>
+        <label style="font-size:0.72rem;color:var(--muted);font-family:var(--font-head);letter-spacing:1px;display:block;margin-bottom:0.3rem">POSITION</label>
+        <select id="waiverPosFilter" style="width:100%">
+          <option value="">All Positions</option>
+          <option value="PG">PG</option><option value="SG">SG</option>
+          <option value="SF">SF</option><option value="PF">PF</option><option value="C">C</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.72rem;color:var(--muted);font-family:var(--font-head);letter-spacing:1px;display:block;margin-bottom:0.3rem">PLAYER TYPE</label>
+        <select id="waiverRoleFilter" style="width:100%">
+          <option value="gems">Hidden Gems (bench/rotation)</option>
+          <option value="all">All Available</option>
+          <option value="streamers">Weekly Streamers (4+ games)</option>
+          <option value="handcuffs">Handcuffs (same team as star)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.72rem;color:var(--muted);font-family:var(--font-head);letter-spacing:1px;display:block;margin-bottom:0.3rem">MIN GAMES THIS WEEK</label>
+        <select id="waiverGamesFilter" style="width:100%">
+          <option value="0">Any</option>
+          <option value="3">3+ games</option>
+          <option value="4" selected>4+ games (streamers)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.72rem;color:var(--muted);font-family:var(--font-head);letter-spacing:1px;display:block;margin-bottom:0.3rem">SORT BY</label>
+        <select id="waiverSortBy" style="width:100%">
+          <option value="waiver">Waiver Score</option>
+          <option value="games">Games This Week</option>
+          <option value="overall">Overall Rating</option>
+          <option value="upside">Upside</option>
+        </select>
       </div>
     </div>
+    <div style="margin-top:0.75rem">
+      <label style="font-size:0.72rem;color:var(--muted);font-family:var(--font-head);letter-spacing:1px;display:block;margin-bottom:0.4rem">CATEGORY NEEDS (optional — boosts relevant players)</label>
+      <div id="waiverNeedToggles" style="display:flex;flex-wrap:wrap;gap:0.4rem"></div>
+    </div>
+    <button class="btn" style="margin-top:1rem" onclick="runWaiverAdvisor()">Find Waiver Targets</button>
+  </div>
+
+  <!-- Quick stats summary -->
+  <div id="waiverSummary" style="display:none;margin-bottom:1rem">
+    <div class="grid-3" id="waiverSummaryCards"></div>
   </div>
 
   <div id="waiverResults" style="display:none">
     <div class="card">
-      <div class="card-title">TOP WAIVER TARGETS</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+        <div class="card-title" style="margin-bottom:0">WAIVER TARGETS</div>
+        <span id="waiverResultCount" style="color:var(--muted);font-size:0.78rem"></span>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>PRIORITY</th><th>PLAYER</th><th>POS</th><th>AGE</th><th>OVERALL</th><th>HELPS WITH</th><th>DYN TIER</th><th>WHY ADD?</th></tr></thead>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>PLAYER</th>
+              <th>POS</th>
+              <th>AGE</th>
+              <th title="Games this week">G WK</th>
+              <th title="NBA team">TEAM</th>
+              <th title="Roster depth role">ROLE</th>
+              <th>OVERALL</th>
+              <th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>ST</th><th>BLK</th>
+              <th>HELPS</th>
+              <th>WHY ADD</th>
+            </tr>
+          </thead>
           <tbody id="waiverTable"></tbody>
         </table>
       </div>
@@ -927,8 +965,106 @@ const PLAYERS_RAW = [
   ["Neemias Queta","C",26,10.2,8.2,1.6,0.4,0.6,1.4,1.0,4.0,2.8,0.32,0.00,68,10],
 ];
 
-// =============================================
-// CATEGORY WEIGHTS
+// ── NBA team + roster depth role per player ───────────────────────────────────
+// role: 1=starter, 2=6th man/primary reserve, 3=rotation bench, 4=deep bench/spot
+// nba: team abbreviation (matches NBA_SCHED_CLIENT keys)
+const PLAYER_META = {
+  // STARTERS (role 1)
+  "Nikola Jokic":            {nba:"DEN",role:1}, "Shai Gilgeous-Alexander":{nba:"OKC",role:1},
+  "Giannis Antetokounmpo":   {nba:"MIL",role:1}, "Luka Doncic":           {nba:"LAL",role:1},
+  "Anthony Edwards":         {nba:"MIN",role:1}, "Victor Wembanyama":      {nba:"SAS",role:1},
+  "Tyrese Maxey":            {nba:"PHI",role:1}, "Cooper Flagg":           {nba:"DAL",role:1},
+  "Jalen Johnson":           {nba:"ATL",role:1}, "Cade Cunningham":        {nba:"DET",role:1},
+  "Donovan Mitchell":        {nba:"CLE",role:1}, "Jaylen Brown":           {nba:"BOS",role:1},
+  "Jalen Brunson":           {nba:"NYK",role:1}, "Kawhi Leonard":          {nba:"LAC",role:1},
+  "Paolo Banchero":          {nba:"ORL",role:1}, "Trae Young":             {nba:"ATL",role:1},
+  "LaMelo Ball":             {nba:"CHA",role:1}, "Stephen Curry":          {nba:"GSW",role:1},
+  "Kevin Durant":            {nba:"PHX",role:1}, "Devin Booker":           {nba:"PHX",role:1},
+  "Jayson Tatum":            {nba:"BOS",role:1}, "Joel Embiid":            {nba:"PHI",role:1},
+  "Anthony Davis":           {nba:"LAL",role:1}, "Bam Adebayo":            {nba:"MIA",role:1},
+  "Domantas Sabonis":        {nba:"SAC",role:1}, "Karl-Anthony Towns":     {nba:"NYK",role:1},
+  "Alperen Sengun":          {nba:"HOU",role:1}, "Evan Mobley":            {nba:"CLE",role:1},
+  "Scottie Barnes":          {nba:"TOR",role:1}, "Franz Wagner":           {nba:"ORL",role:1},
+  "Jalen Williams":          {nba:"OKC",role:1}, "De'Aaron Fox":           {nba:"SAC",role:1},
+  "Tyrese Haliburton":       {nba:"IND",role:1}, "Jaren Jackson Jr":       {nba:"MEM",role:1},
+  "Zach LaVine":             {nba:"CHI",role:1}, "Julius Randle":          {nba:"MIN",role:1},
+  "Darius Garland":          {nba:"CLE",role:1}, "Jalen Green":            {nba:"HOU",role:1},
+  "Immanuel Quickley":       {nba:"TOR",role:1}, "Josh Giddey":            {nba:"CHI",role:1},
+  "Tyler Herro":             {nba:"MIA",role:1}, "Desmond Bane":           {nba:"MEM",role:1},
+  "OG Anunoby":              {nba:"NYK",role:1}, "RJ Barrett":             {nba:"TOR",role:1},
+  "Mikal Bridges":           {nba:"BKN",role:1}, "Cam Thomas":             {nba:"BKN",role:1},
+  "Dejounte Murray":         {nba:"NOP",role:1}, "Devin Vassell":          {nba:"SAS",role:1},
+  "LeBron James":            {nba:"LAL",role:1}, "Ja Morant":              {nba:"MEM",role:1},
+  "Zion Williamson":         {nba:"NOP",role:1}, "Trey Murphy III":        {nba:"NOP",role:1},
+  "Jerami Grant":            {nba:"POR",role:1}, "Anfernee Simons":        {nba:"POR",role:1},
+  "Chet Holmgren":           {nba:"OKC",role:1}, "Jabari Smith Jr":        {nba:"HOU",role:1},
+  "Brandon Ingram":          {nba:"TOR",role:1}, "Pascal Siakam":          {nba:"IND",role:1},
+  "Jimmy Butler":            {nba:"GSW",role:1}, "Derrick White":          {nba:"BOS",role:1},
+  "Lauri Markkanen":         {nba:"UTA",role:1}, "Walker Kessler":         {nba:"UTA",role:1},
+  "Jalen Duren":             {nba:"DET",role:1}, "Andrew Nembhard":        {nba:"IND",role:1},
+  "Keegan Murray":           {nba:"SAC",role:1}, "Ausar Thompson":         {nba:"DET",role:1},
+  "Amen Thompson":           {nba:"HOU",role:1}, "Jonathan Kuminga":       {nba:"GSW",role:1},
+  "Myles Turner":            {nba:"IND",role:1}, "Jalen Suggs":            {nba:"ORL",role:1},
+  "Austin Reaves":           {nba:"LAL",role:1}, "Cameron Johnson":        {nba:"BKN",role:1},
+  "Coby White":              {nba:"CHI",role:1}, "Kel'el Ware":            {nba:"MIA",role:1},
+  "Isaiah Collier":          {nba:"UTA",role:1}, "Scottie Pippen Jr":      {nba:"MEM",role:1},
+  "Jaden Ivey":              {nba:"DET",role:1}, "Dylan Harper":           {nba:"BKN",role:1},
+  "Tre Johnson":             {nba:"DAL",role:1}, "Jeremiah Fears":         {nba:"OKC",role:1},
+  "Kon Knueppel":            {nba:"BKN",role:1}, "Ace Bailey":             {nba:"SAC",role:1},
+  "Stephen Castle":          {nba:"SAS",role:1}, "Stephon Castle":         {nba:"SAS",role:1},
+  "Zaccharie Risacher":      {nba:"ATL",role:1}, "Scoot Henderson":        {nba:"POR",role:1},
+  "VJ Edgecombe":            {nba:"GSW",role:1}, "Derik Queen":            {nba:"HOU",role:2},
+  "Donovan Clingan":         {nba:"POR",role:1}, "Alexandre Sarr":         {nba:"WAS",role:1},
+  "Dyson Daniels":           {nba:"ATL",role:1}, "Cason Wallace":          {nba:"OKC",role:1},
+  "Bilal Coulibaly":         {nba:"WAS",role:1}, "Christian Braun":        {nba:"DEN",role:1},
+  "Brandin Podziemski":      {nba:"GSW",role:1}, "Dereck Lively II":       {nba:"DAL",role:1},
+  "GG Jackson":              {nba:"MEM",role:1}, "Gradey Dick":            {nba:"TOR",role:2},
+  "Tristan da Silva":        {nba:"ORL",role:2}, "Shaedon Sharpe":         {nba:"POR",role:1},
+  "Patrick Williams":        {nba:"CHI",role:2}, "Malaki Branham":         {nba:"SAS",role:2},
+  "Tre Mann":                {nba:"OKC",role:2}, "Jalen Hood-Schifino":    {nba:"LAL",role:3},
+  // 6TH MAN / PRIMARY RESERVES (role 2)
+  "Norman Powell":           {nba:"LAC",role:1}, "Michael Porter Jr":      {nba:"DEN",role:1},
+  "Jamal Murray":            {nba:"DEN",role:1}, "James Harden":           {nba:"LAC",role:1},
+  "Dillon Brooks":           {nba:"HOU",role:1}, "Josh Hart":              {nba:"NYK",role:2},
+  "Rudy Gobert":             {nba:"MIN",role:1}, "Nikola Vucevic":         {nba:"CHI",role:1},
+  "Ivica Zubac":             {nba:"LAC",role:1}, "Isaiah Hartenstein":     {nba:"OKC",role:1},
+  "Daniel Gafford":          {nba:"DAL",role:1}, "Naz Reid":               {nba:"MIN",role:2},
+  "Klay Thompson":           {nba:"DAL",role:2}, "Aaron Gordon":           {nba:"DEN",role:1},
+  "Draymond Green":          {nba:"GSW",role:2}, "Kyle Kuzma":             {nba:"WAS",role:1},
+  "Luguentz Dort":           {nba:"OKC",role:2}, "Ayo Dosunmu":            {nba:"CHI",role:2},
+  "Jay Huff":                {nba:"WAS",role:2}, "Miles Bridges":          {nba:"CHA",role:1},
+  "Nickeil Alexander-Walker":{nba:"MIN",role:2}, "Marcus Smart":           {nba:"MEM",role:2},
+  "Jalen Pickett":           {nba:"IND",role:3}, "Keyon Davis":            {nba:"DAL",role:4},
+  "Toumani Camara":          {nba:"POR",role:2}, "OG Anunoby":             {nba:"NYK",role:1},
+  // BENCH / ROTATION (role 3)
+  "DeMar DeRozan":           {nba:"SAC",role:2}, "Jimmy Butler":           {nba:"GSW",role:1},
+  "Gary Trent Jr":           {nba:"MIL",role:2}, "Jose Alvarado":          {nba:"NOP",role:2},
+  "Max Strus":               {nba:"CLE",role:2}, "Terance Mann":           {nba:"LAC",role:2},
+  "Moses Moody":             {nba:"GSW",role:2}, "Jordan Clarkson":        {nba:"UTA",role:2},
+  "Malik Monk":              {nba:"SAC",role:2}, "Caris LeVert":           {nba:"CLE",role:2},
+  "Cole Anthony":            {nba:"ORL",role:2}, "Wendell Carter Jr":      {nba:"ORL",role:2},
+  "Kyle Anderson":           {nba:"MIN",role:3}, "Markelle Fultz":         {nba:"ORL",role:2},
+  "Brook Lopez":             {nba:"MIL",role:2}, "Khris Middleton":        {nba:"MIL",role:2},
+  "Spencer Dinwiddie":       {nba:"BKN",role:2}, "Dorian Finney-Smith":    {nba:"LAL",role:3},
+  "Bogdan Bogdanovic":       {nba:"ATL",role:2}, "Tim Hardaway Jr":        {nba:"DAL",role:3},
+  "Kelly Olynyk":            {nba:"UTA",role:3}, "Monte Morris":           {nba:"PHX",role:3},
+  "Dean Wade":               {nba:"CLE",role:3}, "Cody Martin":            {nba:"CHA",role:3},
+  "Caleb Martin":            {nba:"MIA",role:2}, "Grant Williams":         {nba:"CHA",role:3},
+  "Goga Bitadze":            {nba:"ORL",role:3}, "Jarace Walker":          {nba:"HOU",role:3},
+  "Derrick Jones Jr":        {nba:"CHI",role:3}, "Neemias Queta":          {nba:"BOS",role:3},
+  "Matisse Thybulle":        {nba:"POR",role:3}, "Seth Curry":             {nba:"BKN",role:3},
+  "Al Horford":              {nba:"BOS",role:3}, "Chris Paul":             {nba:"GSW",role:3},
+  "Robert Williams III":     {nba:"POR",role:3}, "Jock Landale":           {nba:"HOU",role:3},
+  "Harrison Burke":          {nba:"DAL",role:3}, "Jarace Walker":          {nba:"HOU",role:3},
+};
+
+// Games this week per NBA team (week 20, Mar 9-15 2026) — matches server NBA_SCHEDULE
+const TEAM_GAMES_THIS_WEEK = {
+  "ATL":4,"BOS":3,"BKN":4,"CHA":3,"CHI":4,"CLE":3,"DAL":3,"DEN":4,
+  "DET":3,"GSW":4,"HOU":3,"IND":4,"LAC":3,"LAL":4,"MEM":3,"MIA":4,
+  "MIL":3,"MIN":4,"NOP":3,"NYK":4,"OKC":3,"ORL":4,"PHI":3,"PHX":4,
+  "POR":3,"SAC":4,"SAS":3,"TOR":4,"UTA":3,"WAS":4
+};
 // =============================================
 let WEIGHTS = {
   TD:   0.75, DD:   0.60, ST:   0.88, BLK:  0.74,
@@ -1375,68 +1511,215 @@ let selectedNeeds = new Set();
 
 function buildWaiverNeedToggles() {
   document.getElementById('waiverNeedToggles').innerHTML = ALL_CATS.map(cat =>
-    `<button class="btn secondary" style="font-size:0.78rem;padding:0.25rem 0.6rem" id="need-${cat}" onclick="toggleNeed('${cat}')">${cat}</button>`
+    `<button style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+      font-family:var(--font-head);font-size:0.75rem;font-weight:700;letter-spacing:1px;
+      padding:0.25rem 0.6rem;border-radius:4px;cursor:pointer;transition:all 0.15s;text-transform:uppercase"
+      id="need-${cat}" onclick="toggleNeed('${cat}')">${cat}</button>`
   ).join('');
 }
 
 function toggleNeed(cat) {
-  if (selectedNeeds.has(cat)) { selectedNeeds.delete(cat); document.getElementById(`need-${cat}`).classList.remove('btn'); document.getElementById(`need-${cat}`).classList.add('secondary'); }
-  else { selectedNeeds.add(cat); document.getElementById(`need-${cat}`).style.background = 'var(--accent)'; document.getElementById(`need-${cat}`).style.color = 'white'; }
+  if (selectedNeeds.has(cat)) {
+    selectedNeeds.delete(cat);
+  } else {
+    selectedNeeds.add(cat);
+  }
   const el = document.getElementById(`need-${cat}`);
-  if (selectedNeeds.has(cat)) { el.style.background='var(--accent)'; el.style.color='white'; }
-  else { el.style.background=''; el.style.color=''; }
+  if (el) {
+    el.style.background = selectedNeeds.has(cat) ? 'var(--accent)' : '';
+    el.style.color      = selectedNeeds.has(cat) ? 'white' : '';
+    el.style.borderColor= selectedNeeds.has(cat) ? 'var(--accent)' : '';
+  }
+}
+
+function getPlayerGamesThisWeek(p) {
+  const meta = PLAYER_META[p.name];
+  if (!meta) return 3; // default assumption
+  return TEAM_GAMES_THIS_WEEK[meta.nba] || 3;
+}
+
+function getPlayerRole(p) {
+  return (PLAYER_META[p.name] || {}).role || 2;
+}
+
+function getPlayerNBATeam(p) {
+  // First check if yahoo roster sync gave us the team
+  const rosterInfo = yahooRosterMap[normName(p.name)];
+  if (rosterInfo?.teamName) {
+    // rosterInfo.teamName is the fantasy team name, not NBA — use PLAYER_META
+  }
+  return (PLAYER_META[p.name] || {}).nba || '—';
 }
 
 function runWaiverAdvisor() {
-  const pos = document.getElementById('waiverPosFilter').value;
-  const minScore = parseInt(document.getElementById('waiverMinScore').value);
-  const needs = [...selectedNeeds];
+  const pos        = document.getElementById('waiverPosFilter').value;
+  const roleMode   = document.getElementById('waiverRoleFilter').value;
+  const minGames   = parseInt(document.getElementById('waiverGamesFilter').value) || 0;
+  const sortBy     = document.getElementById('waiverSortBy').value;
+  const needs      = [...selectedNeeds];
 
   const catKeyMap = {PTS:'pts',REB:'reb',AST:'ast',"3PTM":'threepm',ST:'stl',BLK:'blk',TO:'to',FGM:'fgm',FTM:'ftm',DD:'dd',TD:'td'};
+  const leagueAvg  = {pts:18,reb:6,ast:4,threepm:1.8,stl:0.9,blk:0.6,to:2.2,fgm:6.0,ftm:3.2,dd:0.18,td:0.02};
 
-  let available = PLAYERS.filter(p => !owned.has(p.id) && p.overall >= minScore && (!pos || p.pos.includes(pos)));
+  // Max values for normalisation
+  const catMaxes = {};
+  Object.values(catKeyMap).forEach(k => {
+    catMaxes[k] = PLAYERS.reduce((mx,x) => Math.max(mx, x[k]||0), 1);
+  });
 
-  if (needs.length > 0) {
-    available = available.map(p => {
-      const catFit = needs.reduce((s, cat) => {
-        const key = catKeyMap[cat];
-        if (!key) return s;
-        if (cat === 'TO') return s + (p.to < 2.5 ? 1 : 0);
-        return s + (p[key] || 0) / (PLAYERS.reduce((mx, x) => Math.max(mx, x[key]||0), 1));
-      }, 0);
-      return { ...p, waiverScore: p.overall * 0.6 + catFit * 40 };
-    }).sort((a, b) => b.waiverScore - a.waiverScore);
-  } else {
-    available = available.sort((a, b) => (b.overall - a.overall) || (b.catScore - a.catScore) || (b.dynastyScore - a.dynastyScore));
+  // ── 1. Filter to unowned players ──────────────────────────────────────────
+  let pool = PLAYERS.filter(p => !owned.has(p.id) && (!pos || p.pos.includes(pos)));
+
+  // ── 2. Apply game count filter ────────────────────────────────────────────
+  if (minGames > 0) {
+    pool = pool.filter(p => getPlayerGamesThisWeek(p) >= minGames);
   }
 
+  // ── 3. Apply role/type filter — the core "hidden gems" logic ─────────────
+  if (roleMode === 'gems') {
+    // Bench/rotation players: role 2-4 OR overall < 82
+    // Excludes clear studs (role 1 + overall 82+) who'd dominate in any league
+    pool = pool.filter(p => {
+      const role = getPlayerRole(p);
+      return role >= 2 || p.overall < 82;
+    });
+  } else if (roleMode === 'streamers') {
+    // 4+ games this week regardless of role
+    pool = pool.filter(p => getPlayerGamesThisWeek(p) >= 4);
+  } else if (roleMode === 'handcuffs') {
+    // Players on same NBA team as a high-value owned player
+    const ownedNBATeams = new Set(
+      [...owned].map(id => {
+        const op = PLAYERS.find(x => x.id === id);
+        return op ? getPlayerNBATeam(op) : null;
+      }).filter(Boolean)
+    );
+    if (ownedNBATeams.size > 0) {
+      pool = pool.filter(p => ownedNBATeams.has(getPlayerNBATeam(p)));
+    }
+  }
+  // 'all' — no additional filter
+
+  // ── 4. Score each player ──────────────────────────────────────────────────
+  pool = pool.map(p => {
+    const games  = getPlayerGamesThisWeek(p);
+    const role   = getPlayerRole(p);
+
+    // Cat fit: how much does this player help the selected needs?
+    let catFit = 0;
+    if (needs.length > 0) {
+      catFit = needs.reduce((s, cat) => {
+        const key = catKeyMap[cat];
+        if (!key) return s;
+        if (cat === 'TO') return s + (p.to < leagueAvg.to ? 1.5 : 0);
+        return s + ((p[key] || 0) / catMaxes[key]) * 2;
+      }, 0) / needs.length;
+    }
+
+    // Value-per-game: stat production × games (what matters for a weekly pickup)
+    const perGameValue = p.catScore * games / 3.5; // 3.5 = average games baseline
+
+    // Hidden gem bonus: high production relative to low overall rank (undervalued)
+    const gemBonus = Math.max(0, (p.catScore - p.overall * 0.3)) * 0.5;
+
+    // Upside boost for young players with room to grow
+    const youthBonus = p.age <= 23 ? 4 : p.age <= 25 ? 2 : 0;
+
+    // Availability signal: deeper role = more likely actually on waivers
+    const availBonus = role === 1 ? 0 : role === 2 ? 3 : role === 3 ? 5 : 6;
+
+    const waiverScore = (
+      perGameValue * 8 +
+      catFit * 12 +
+      gemBonus +
+      youthBonus +
+      availBonus +
+      games * 2
+    );
+
+    return { ...p, waiverScore, games, role, nbaTeam: getPlayerNBATeam(p) };
+  });
+
+  // ── 5. Sort ───────────────────────────────────────────────────────────────
+  if (sortBy === 'games')   pool.sort((a,b) => b.games - a.games || b.waiverScore - a.waiverScore);
+  else if (sortBy === 'overall') pool.sort((a,b) => b.overall - a.overall);
+  else if (sortBy === 'upside')  pool.sort((a,b) => b.upside - a.upside);
+  else pool.sort((a,b) => b.waiverScore - a.waiverScore);
+
+  const top = pool.slice(0, 25);
+
+  // ── 6. Summary cards ─────────────────────────────────────────────────────
+  const summaryEl = document.getElementById('waiverSummary');
+  const summaryCards = document.getElementById('waiverSummaryCards');
+  if (summaryEl && summaryCards) {
+    summaryEl.style.display = 'block';
+    const with4games = pool.filter(p => p.games >= 4).length;
+    const youngGems  = pool.filter(p => p.age <= 24 && p.role >= 2).length;
+    summaryCards.innerHTML = `
+      <div class="card stat-box"><div class="stat-val" style="color:var(--green)">${pool.length}</div><div class="stat-lbl">Available Players</div></div>
+      <div class="card stat-box"><div class="stat-val" style="color:var(--gold)">${with4games}</div><div class="stat-lbl">With 4+ Games This Wk</div></div>
+      <div class="card stat-box"><div class="stat-val" style="color:var(--accent2)">${youngGems}</div><div class="stat-lbl">Young Hidden Gems (≤24)</div></div>
+    `;
+  }
+
+  // ── 7. Render table ───────────────────────────────────────────────────────
   document.getElementById('waiverResults').style.display = 'block';
+  const countEl = document.getElementById('waiverResultCount');
+  if (countEl) countEl.textContent = `Showing ${top.length} of ${pool.length} available`;
 
-  const leagueAvg = {pts:22,reb:8,ast:5,threepm:2.2,stl:1.1,blk:0.7,to:2.5,fgm:7.5,ftm:4.0,dd:0.25,td:0.03};
+  const roleLabel = {1:'Starter',2:'6th Man',3:'Rotation',4:'Deep Bench'};
+  const roleColor = {1:'var(--gold)',2:'var(--accent)',3:'var(--muted)',4:'var(--border)'};
 
-  document.getElementById('waiverTable').innerHTML = available.slice(0, 20).map((p, i) => {
-    const tier = getTier(p.overall);
+  document.getElementById('waiverTable').innerHTML = top.map((p, i) => {
     const helps = needs.filter(cat => {
       const key = catKeyMap[cat];
       if (!key) return false;
       if (cat === 'TO') return p.to < leagueAvg.to;
       return (p[key] || 0) > (leagueAvg[key] || 0);
     });
-    const needLevel = helps.length >= 3 ? 'HIGH' : helps.length >= 2 ? 'MED' : 'LOW';
-    const needCls = helps.length >= 3 ? '' : helps.length >= 2 ? 'med' : 'low';
+
+    // Why add text
     const why = [];
-    if (p.age <= 24) why.push('Young');
-    if (p.overall >= 75) why.push('Elite producer');
-    if (p.dynastyScore >= 80) why.push('Dynasty value');
+    if (p.games >= 4) why.push(`🔥 ${p.games}G this week`);
+    if (p.age <= 23)  why.push('🌱 Young upside');
+    if (p.role >= 3)  why.push('💎 Deep gem');
+    if (p.stl >= 1.3) why.push('🔒 Steals specialist');
+    if (p.blk >= 1.4) why.push('🛡 Shot blocker');
+    if (p.threepm >= 2.5) why.push('🎯 3PT value');
+    if (p.ast >= 5)   why.push('🎪 Dimes');
+    if (p.upside >= 80 && p.role >= 2) why.push('📈 Breakout candidate');
+    if (!why.length)  why.push('Solid contributor');
+
+    const gamesColor = p.games >= 4 ? 'var(--green)' : p.games >= 3 ? 'var(--text)' : 'var(--red)';
+    const gamesBg    = p.games >= 4 ? 'rgba(34,197,94,0.12)' : '';
+
     return `<tr>
-      <td><span class="need-tag ${needCls}">${needLevel}</span></td>
-      <td><strong>${p.name}</strong></td>
-      <td>${p.pos}</td>
-      <td style="color:${p.age<=24?'var(--green)':p.age>=34?'var(--red)':'var(--muted)'}">${p.age}</td>
-      <td><strong>${p.overall}</strong></td>
-      <td>${helps.length ? helps.map(c=>`<span style="font-size:0.72rem;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:0.1rem 0.3rem;margin:0.1rem">${c}</span>`).join('') : '<span style="color:var(--muted)">General</span>'}</td>
-      <td><span class="tier-${tier}">${tier}</span></td>
-      <td style="font-size:0.78rem;color:var(--muted)">${why.join(' · ')}</td>
+      <td style="color:var(--muted);font-size:0.8rem">${i+1}</td>
+      <td>
+        <strong>${p.name}</strong>
+        ${p.isInjured ? `<span style="background:var(--red);color:white;font-size:0.6rem;font-family:var(--font-head);font-weight:700;padding:0.05rem 0.25rem;border-radius:2px;margin-left:0.3rem">${p.injStatus||'INJ'}</span>` : ''}
+      </td>
+      <td style="color:var(--muted)">${p.pos}</td>
+      <td style="color:${p.age<=23?'var(--green)':p.age>=34?'var(--red)':'var(--muted)'}">${p.age}</td>
+      <td style="background:${gamesBg};border-radius:4px;text-align:center">
+        <span style="font-family:var(--font-head);font-weight:900;font-size:1rem;color:${gamesColor}">${p.games}</span>
+      </td>
+      <td>
+        <span style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--muted)">${p.nbaTeam}</span>
+      </td>
+      <td>
+        <span style="font-size:0.7rem;font-family:var(--font-head);font-weight:700;color:${roleColor[p.role]||'var(--muted)'}">${roleLabel[p.role]||'—'}</span>
+      </td>
+      <td>
+        <div class="score-bar-wrap" style="min-width:80px">
+          <div class="score-bar"><div class="score-bar-fill" style="width:${p.overall}%"></div></div>
+          <span class="score-num">${p.overall}</span>
+        </div>
+      </td>
+      <td>${p.pts}</td><td>${p.reb}</td><td>${p.ast}</td><td>${p.threepm}</td>
+      <td>${p.stl}</td><td>${p.blk}</td>
+      <td>${helps.length ? helps.map(c=>`<span style="font-size:0.68rem;background:var(--surface2);border:1px solid var(--accent);color:var(--accent);border-radius:3px;padding:0.05rem 0.3rem;margin:0.1rem;display:inline-block">${c}</span>`).join('') : '<span style="color:var(--muted);font-size:0.75rem">—</span>'}</td>
+      <td style="font-size:0.75rem;color:var(--muted);max-width:180px">${why.slice(0,2).join(' · ')}</td>
     </tr>`;
   }).join('');
 }
@@ -1472,6 +1755,13 @@ function showPage(id) {
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById(`page-${id}`).classList.add('active');
   document.querySelector(`button[onclick="showPage('${id}')"]`).classList.add('active');
+  // Auto-load data pages on first visit
+  if (id === 'matchups' && selectedLeagueKey && !document.getElementById('matchupsGrid').innerHTML.trim()) {
+    initMatchupsPage();
+  }
+  if (id === 'schedule' && selectedLeagueKey && !document.getElementById('scheduleTable').innerHTML.trim()) {
+    loadScheduleStrength();
+  }
 }
 
 function showToast(msg) {
@@ -2064,17 +2354,7 @@ function renderNBATeamGrid() {
   }).join('');
 }
 
-// Hook into showPage to auto-load these pages
-const _origShowPage = showPage;
-function showPage(id) {
-  _origShowPage(id);
-  if (id === 'matchups' && selectedLeagueKey && document.getElementById('matchupsGrid').innerHTML === '') {
-    initMatchupsPage();
-  }
-  if (id === 'schedule' && selectedLeagueKey && document.getElementById('scheduleTable').innerHTML === '') {
-    loadScheduleStrength();
-  }
-}
+
 
 // =============================================
 // INIT

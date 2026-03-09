@@ -1,6 +1,4 @@
-"""The Boardroom — server.py
-Stats source: Yahoo Fantasy Sports API
-"""
+"""The Boardroom — server.py"""
 import os, time, json, requests, traceback
 from datetime import datetime
 from flask import Flask, jsonify, request, redirect, send_from_directory
@@ -18,248 +16,269 @@ YAHOO_TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 YAHOO_API_BASE  = "https://fantasysports.yahooapis.com/fantasy/v2"
 
 YAHOO_GAME_KEYS = {
-    "2025-26": "nba",
+    "2025-26": "466",
     "2024-25": "428",
     "2023-24": "418",
     "2022-23": "410",
 }
-
-YAHOO_STAT_MAP = {
-    "5": "fgm", "8": "ftm", "10": "threepm",
-    "12": "pts", "13": "reb", "15": "ast",
-    "16": "stl", "17": "blk", "18": "to",
-}
+YAHOO_STAT_MAP = {"5":"fgm","8":"ftm","10":"threepm","12":"pts","13":"reb","15":"ast","16":"stl","17":"blk","18":"to"}
 
 _cache = {}
 CACHE_TTL = 3600
-YAHOO_TTL = 300
+YAHOO_TTL  = 300
 _TOKEN_PATH = "/tmp/br_tokens.json"
 
 # ── Token storage ──────────────────────────────────────────────────────────────
 def _load_tokens():
     try:
         with open(_TOKEN_PATH) as f: return json.load(f)
-    except Exception:
-        return {"access_token": None, "refresh_token": None, "expires_at": 0}
+    except: return {"access_token":None,"refresh_token":None,"expires_at":0}
 
 def _save_tokens(d):
     try:
-        with open(_TOKEN_PATH, "w") as f: json.dump(d, f)
-    except Exception: pass
+        with open(_TOKEN_PATH,"w") as f: json.dump(d,f)
+    except: pass
 
 class _Tokens:
-    def __getitem__(self, k): return _load_tokens()[k]
-    def __setitem__(self, k, v): d=_load_tokens(); d[k]=v; _save_tokens(d)
-    def get(self, k, default=None): return _load_tokens().get(k, default)
-    def update(self, u): d=_load_tokens(); d.update(u); _save_tokens(d)
+    def __getitem__(self,k): return _load_tokens()[k]
+    def __setitem__(self,k,v): d=_load_tokens(); d[k]=v; _save_tokens(d)
+    def get(self,k,default=None): return _load_tokens().get(k,default)
+    def update(self,u): d=_load_tokens(); d.update(u); _save_tokens(d)
 
 _tokens = _Tokens()
 
-# ── Cache ──────────────────────────────────────────────────────────────────────
-def _cached(key, fn, ttl=CACHE_TTL):
-    now = time.time()
-    if key in _cache and now - _cache[key][1] < ttl:
-        return _cache[key][0]
-    data = fn(); _cache[key] = (data, now); return data
+def _cached(key,fn,ttl=CACHE_TTL):
+    now=time.time()
+    if key in _cache and now-_cache[key][1]<ttl: return _cache[key][0]
+    data=fn(); _cache[key]=(data,now); return data
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# ── Structure helpers ──────────────────────────────────────────────────────────
 def _merge(lst):
     """Flatten a Yahoo list-of-dicts into one dict."""
-    if isinstance(lst, dict): return lst
-    out = {}
+    if isinstance(lst,dict): return lst
+    out={}
     for item in lst:
-        if isinstance(item, dict): out.update(item)
+        if isinstance(item,dict): out.update(item)
     return out
 
-def _find_in_list(lst, key):
-    for item in lst:
-        if isinstance(item, dict) and key in item: return item[key]
+def _find_key(obj, key):
+    """Recursively find first occurrence of key in any nested structure."""
+    if isinstance(obj,dict):
+        if key in obj: return obj[key]
+        for v in obj.values():
+            r=_find_key(v,key)
+            if r is not None: return r
+    elif isinstance(obj,list):
+        for item in obj:
+            r=_find_key(item,key)
+            if r is not None: return r
     return None
 
-def _deep_search(obj, target_key):
-    """Recursively search for a key anywhere in a nested structure."""
-    if isinstance(obj, dict):
-        if target_key in obj: return obj[target_key]
-        for v in obj.values():
-            r = _deep_search(v, target_key)
-            if r is not None: return r
-    elif isinstance(obj, list):
-        for item in obj:
-            r = _deep_search(item, target_key)
-            if r is not None: return r
+def _find_in_list(lst,key):
+    for item in lst:
+        if isinstance(item,dict) and key in item: return item[key]
     return None
+
+def _annotate(obj, depth=0, max_depth=4):
+    """Return a human-readable type-annotated skeleton for debugging."""
+    indent = "  " * depth
+    if depth > max_depth: return f"{indent}..."
+    if isinstance(obj, dict):
+        lines = [f"{indent}{{"]
+        for k,v in list(obj.items())[:20]:
+            lines.append(f"{indent}  {repr(k)}: {_annotate(v, depth+1, max_depth)}")
+        if len(obj) > 20: lines.append(f"{indent}  ... ({len(obj)} total keys)")
+        lines.append(f"{indent}}}")
+        return "\n".join(lines)
+    elif isinstance(obj, list):
+        if not obj: return f"{indent}[]"
+        lines = [f"{indent}[ // {len(obj)} items"]
+        for i,v in enumerate(obj[:5]):
+            lines.append(f"{indent}  [{i}]: {_annotate(v, depth+1, max_depth)}")
+        if len(obj) > 5: lines.append(f"{indent}  ...")
+        lines.append(f"{indent}]")
+        return "\n".join(lines)
+    else:
+        s = repr(obj)
+        return s[:120] + "..." if len(s) > 120 else s
 
 def _current_season():
-    now = datetime.now(); y = now.year
-    return f"{y}-{str(y+1)[2:]}" if now.month >= 10 else f"{y-1}-{str(y)[2:]}"
+    now=datetime.now(); y=now.year
+    return f"{y}-{str(y+1)[2:]}" if now.month>=10 else f"{y-1}-{str(y)[2:]}"
 
-def _est_dd(pts, reb, ast, stl, blk):
-    cats = [pts, reb, ast, stl*5, blk*6]; d = sum(1 for v in cats if v >= 10)
-    if d >= 2: return round(min(0.95, 0.70+d*0.08), 3)
-    n = sum(1 for v in cats if v >= 7)
-    return round(min(0.55, 0.25+n*0.10), 3) if n >= 2 else round(min(0.25, pts/60+reb/40+ast/35), 3)
+def _est_dd(pts,reb,ast,stl,blk):
+    cats=[pts,reb,ast,stl*5,blk*6]; d=sum(1 for v in cats if v>=10)
+    if d>=2: return round(min(0.95,0.70+d*0.08),3)
+    n=sum(1 for v in cats if v>=7)
+    return round(min(0.55,0.25+n*0.10),3) if n>=2 else round(min(0.25,pts/60+reb/40+ast/35),3)
 
-def _est_td(pts, reb, ast, stl, blk):
-    cats = [pts, reb, ast, stl*5, blk*6]; d = sum(1 for v in cats if v >= 10)
-    if d >= 3: return round(min(0.55, 0.30+d*0.05), 3)
-    return 0.12 if d >= 2 and sum(1 for v in cats if v >= 7) >= 3 else round(min(0.08, pts/200+reb/120+ast/100), 3)
+def _est_td(pts,reb,ast,stl,blk):
+    cats=[pts,reb,ast,stl*5,blk*6]; d=sum(1 for v in cats if v>=10)
+    if d>=3: return round(min(0.55,0.30+d*0.05),3)
+    return 0.12 if d>=2 and sum(1 for v in cats if v>=7)>=3 else round(min(0.08,pts/200+reb/120+ast/100),3)
 
-# ── Yahoo API wrapper ──────────────────────────────────────────────────────────
+# ── Yahoo API ──────────────────────────────────────────────────────────────────
 def _get_token():
-    t = _load_tokens()
+    t=_load_tokens()
     if not t.get("access_token"): return None
-    if time.time() > t.get("expires_at", 0) - 60:
-        r = requests.post(YAHOO_TOKEN_URL,
+    if time.time()>t.get("expires_at",0)-60:
+        r=requests.post(YAHOO_TOKEN_URL,
             data={"grant_type":"refresh_token","refresh_token":t.get("refresh_token","")},
-            auth=(YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET))
+            auth=(YAHOO_CLIENT_ID,YAHOO_CLIENT_SECRET))
         if r.ok:
-            tok = r.json()
-            t["access_token"] = tok["access_token"]
-            t["expires_at"] = time.time() + tok.get("expires_in", 3600)
-            if tok.get("refresh_token"): t["refresh_token"] = tok["refresh_token"]
+            tok=r.json(); t["access_token"]=tok["access_token"]
+            t["expires_at"]=time.time()+tok.get("expires_in",3600)
+            if tok.get("refresh_token"): t["refresh_token"]=tok["refresh_token"]
             _save_tokens(t)
         else: return None
     return t["access_token"]
 
-def _yahoo(path, cache=True, ttl=YAHOO_TTL):
+def _yahoo(path,cache=True,ttl=YAHOO_TTL):
     def fetch():
-        tok = _get_token()
-        if not tok: return {"error": "not_authenticated"}
-        sep = "&" if "?" in path else "?"
-        r = requests.get(f"{YAHOO_API_BASE}{path}{sep}format=json",
-                         headers={"Authorization": f"Bearer {tok}"})
-        if r.status_code == 401: return {"error": "token_expired"}
-        if not r.ok: return {"error": f"yahoo_{r.status_code}", "detail": r.text[:300]}
+        tok=_get_token()
+        if not tok: return {"error":"not_authenticated"}
+        sep="&" if "?" in path else "?"
+        r=requests.get(f"{YAHOO_API_BASE}{path}{sep}format=json",
+                       headers={"Authorization":f"Bearer {tok}"})
+        if r.status_code==401: return {"error":"token_expired"}
+        if not r.ok: return {"error":f"yahoo_{r.status_code}","detail":r.text[:300]}
         return r.json()
-    return _cached(f"y_{path}", fetch, ttl) if cache else fetch()
+    return _cached(f"y_{path}",fetch,ttl) if cache else fetch()
 
 # ── Player parsers ─────────────────────────────────────────────────────────────
-def _extract_manager_name(mgr_raw):
-    """Extract nickname from managers field regardless of nesting."""
+def _extract_manager(mgr_raw):
+    """Extract manager nickname from any Yahoo managers nesting."""
     if not mgr_raw: return ""
-    # Could be dict {"manager": {...}} or list [{"manager": {...}}]
-    result = _deep_search(mgr_raw, "nickname")
+    result = _find_key(mgr_raw,"nickname")
     return result or ""
 
+def _extract_is_current_login(team_entry):
+    """Check if this team belongs to the logged-in user."""
+    result = _find_key(team_entry,"is_current_login")
+    return str(result) == "1"
+
 def _parse_player_roster(p):
-    p_info = _merge(p[0]) if isinstance(p[0], list) else p[0]
-    pos_section = p[1] if len(p) > 1 else {}
-    selected_pos = ""
-    pos_data = pos_section.get("selected_position", [])
-    if isinstance(pos_data, list): selected_pos = _merge(pos_data).get("position", "")
-    elif isinstance(pos_data, dict): selected_pos = pos_data.get("position", "")
-    elig_raw = p_info.get("eligible_positions", {})
-    if isinstance(elig_raw, dict):
-        elig_list = elig_raw.get("position", [])
-        if isinstance(elig_list, list):
-            eligible = [e.get("position","") if isinstance(e,dict) else e for e in elig_list]
-        else: eligible = [elig_list] if elig_list else []
-    else: eligible = []
-    name = p_info.get("full_name", "")
+    p_info=_merge(p[0]) if isinstance(p[0],list) else p[0]
+    pos_section=p[1] if len(p)>1 else {}
+    selected_pos=""
+    pos_data=pos_section.get("selected_position",[])
+    if isinstance(pos_data,list): selected_pos=_merge(pos_data).get("position","")
+    elif isinstance(pos_data,dict): selected_pos=pos_data.get("position","")
+    elig_raw=p_info.get("eligible_positions",{})
+    if isinstance(elig_raw,dict):
+        elig_list=elig_raw.get("position",[])
+        if isinstance(elig_list,list):
+            eligible=[e.get("position","") if isinstance(e,dict) else e for e in elig_list]
+        else: eligible=[elig_list] if elig_list else []
+    else: eligible=[]
+    name=p_info.get("full_name","")
     if not name:
-        n = p_info.get("name", {}); name = n.get("full","") if isinstance(n,dict) else str(n)
-    return {
-        "player_key": p_info.get("player_key",""), "name": name,
-        "team": p_info.get("editorial_team_abbr",""), "positions": eligible,
-        "slot": selected_pos, "status": p_info.get("status",""),
-        "injury_note": p_info.get("status_full","")
-    }
+        n=p_info.get("name",{}); name=n.get("full","") if isinstance(n,dict) else str(n)
+    status=p_info.get("status","")
+    # Yahoo uses "INJ", "O", "DTD", "SSPD", "NA" etc.
+    inj_statuses = {"INJ","O","DTD","SSPD","IR","IR-R","IR+","NA"}
+    is_injured = status.upper() in inj_statuses
+    return {"player_key":p_info.get("player_key",""),"name":name,
+            "team":p_info.get("editorial_team_abbr",""),"positions":eligible,
+            "slot":selected_pos,"status":status,"is_injured":is_injured,
+            "injury_note":p_info.get("status_full","")}
 
 def _parse_yahoo_player_stats(p_entry):
-    if not isinstance(p_entry, list) or len(p_entry) < 2: return None
-    info = _merge(p_entry[0]) if isinstance(p_entry[0], list) else p_entry[0]
-    name = info.get("full_name", "")
+    if not isinstance(p_entry,list) or len(p_entry)<2: return None
+    info=_merge(p_entry[0]) if isinstance(p_entry[0],list) else p_entry[0]
+    name=info.get("full_name","")
     if not name:
-        n = info.get("name", {}); name = n.get("full","") if isinstance(n,dict) else str(n)
+        n=info.get("name",{}); name=n.get("full","") if isinstance(n,dict) else str(n)
     if not name: return None
-    elig_raw = info.get("eligible_positions", {})
-    if isinstance(elig_raw, dict):
-        elig_list = elig_raw.get("position", [])
-        positions = [e.get("position","") if isinstance(e,dict) else str(e)
-                     for e in (elig_list if isinstance(elig_list,list) else [elig_list])]
-    else: positions = []
-    pos_pref = ["PG","SG","SF","PF","C"]
-    pos = next((p for p in pos_pref if p in positions), positions[0] if positions else "F")
-    stats_block = p_entry[1] if len(p_entry) > 1 else {}
-    ps = stats_block.get("player_stats", {}) if isinstance(stats_block, dict) else {}
-    raw_stats = ps.get("stats", {}).get("stat", []) if isinstance(ps.get("stats"), dict) else []
-    if isinstance(raw_stats, dict): raw_stats = [raw_stats]
-    stat_vals = {}
+    elig_raw=info.get("eligible_positions",{})
+    if isinstance(elig_raw,dict):
+        elig_list=elig_raw.get("position",[])
+        positions=[e.get("position","") if isinstance(e,dict) else str(e)
+                   for e in (elig_list if isinstance(elig_list,list) else [elig_list])]
+    else: positions=[]
+    pos_pref=["PG","SG","SF","PF","C"]
+    pos=next((p for p in pos_pref if p in positions),positions[0] if positions else "F")
+    stats_block=p_entry[1] if len(p_entry)>1 else {}
+    ps=stats_block.get("player_stats",{}) if isinstance(stats_block,dict) else {}
+    raw_stats=ps.get("stats",{}).get("stat",[]) if isinstance(ps.get("stats"),dict) else []
+    if isinstance(raw_stats,dict): raw_stats=[raw_stats]
+    stat_vals={}
     for s in raw_stats:
-        if isinstance(s, dict):
-            try: stat_vals[str(s.get("stat_id",""))] = float(s.get("value","0") or 0)
-            except (ValueError, TypeError): stat_vals[str(s.get("stat_id",""))] = 0.0
-    def g(sid): return stat_vals.get(str(sid), 0.0)
-    pts=round(g(12),1); reb=round(g(13),1); ast=round(g(15),1)
-    stl=round(g(16),1); blk=round(g(17),1); to=round(g(18),1)
-    fgm=round(g(5),1);  ftm=round(g(8),1);  threepm=round(g(10),1)
-    if pts == 0 and reb == 0 and ast == 0: return None
-    return {
-        "name": name, "team": info.get("editorial_team_abbr",""), "pos": pos,
-        "positions": positions, "status": info.get("status",""),
-        "injury_note": info.get("status_full",""),
-        "pts": pts, "reb": reb, "ast": ast, "stl": stl, "blk": blk, "to": to,
-        "fgm": fgm, "ftm": ftm, "threepm": threepm,
-        "dd_est": _est_dd(pts,reb,ast,stl,blk), "td_est": _est_td(pts,reb,ast,stl,blk)
-    }
+        if isinstance(s,dict):
+            try: stat_vals[str(s.get("stat_id",""))]=float(s.get("value","0") or 0)
+            except: stat_vals[str(s.get("stat_id",""))]=0.0
+    def g(sid): return stat_vals.get(str(sid),0.0)
+    pts=round(g(12),1);reb=round(g(13),1);ast=round(g(15),1)
+    stl=round(g(16),1);blk=round(g(17),1);to=round(g(18),1)
+    fgm=round(g(5),1); ftm=round(g(8),1); threepm=round(g(10),1)
+    if pts==0 and reb==0 and ast==0: return None
+    status=info.get("status","")
+    inj_statuses={"INJ","O","DTD","SSPD","IR","IR-R","IR+","NA"}
+    return {"name":name,"team":info.get("editorial_team_abbr",""),"pos":pos,
+            "positions":positions,"status":status,
+            "is_injured":status.upper() in inj_statuses,
+            "injury_note":info.get("status_full",""),
+            "pts":pts,"reb":reb,"ast":ast,"stl":stl,"blk":blk,"to":to,
+            "fgm":fgm,"ftm":ftm,"threepm":threepm,
+            "dd_est":_est_dd(pts,reb,ast,stl,blk),"td_est":_est_td(pts,reb,ast,stl,blk)}
 
 def _fetch_yahoo_players(game_key, target=400):
-    tok = _get_token()
+    tok=_get_token()
     if not tok: return {"error":"not_authenticated","players":[],"count":0}
-    headers = {"Authorization": f"Bearer {tok}"}
-    all_players = []; start = 0; batch = 25
-    for _ in range((target // batch) + 2):
-        url = (f"{YAHOO_API_BASE}/game/{game_key}/players"
-               f";start={start};count={batch};out=stats?format=json")
-        try: r = requests.get(url, headers=headers, timeout=20)
-        except Exception: break
-        if r.status_code == 401: return {"error":"token_expired","players":all_players,"count":len(all_players)}
+    headers={"Authorization":f"Bearer {tok}"}
+    all_players=[]; start=0; batch=25
+    for _ in range((target//batch)+2):
+        url=(f"{YAHOO_API_BASE}/game/{game_key}/players"
+             f";start={start};count={batch};out=stats?format=json")
+        try: r=requests.get(url,headers=headers,timeout=20)
+        except: break
+        if r.status_code==401: return {"error":"token_expired","players":all_players,"count":len(all_players)}
         if not r.ok: break
         try:
-            game_data = r.json()["fantasy_content"]["game"]
-            ps = None
+            game_data=r.json()["fantasy_content"]["game"]
+            ps=None
             for item in game_data:
-                if isinstance(item, dict) and "players" in item: ps = item["players"]; break
-            if not ps or ps.get("count",0) == 0: break
-            cnt = ps["count"]
+                if isinstance(item,dict) and "players" in item: ps=item["players"]; break
+            if not ps or ps.get("count",0)==0: break
+            cnt=ps["count"]
             for i in range(cnt):
-                p_entry = ps.get(str(i),{}).get("player")
+                p_entry=ps.get(str(i),{}).get("player")
                 if p_entry:
-                    parsed = _parse_yahoo_player_stats(p_entry)
+                    parsed=_parse_yahoo_player_stats(p_entry)
                     if parsed: all_players.append(parsed)
-            start += cnt
-            if cnt < batch or len(all_players) >= target: break
-        except Exception: break
+            start+=cnt
+            if cnt<batch or len(all_players)>=target: break
+        except: break
     return {"players":all_players,"count":len(all_players),"source":"yahoo","game_key":game_key}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ROUTES
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/")
-def index(): return send_from_directory(".", "fantasy-hoops.html")
+def index(): return send_from_directory(".","fantasy-hoops.html")
 
 @app.route("/api/health")
 def health():
     return jsonify({"status":"ok","season":_current_season(),
                     "yahoo_authenticated":bool(_load_tokens().get("access_token")),
-                    "redirect_uri":YAHOO_REDIRECT_URI,"stats_source":"yahoo"})
+                    "redirect_uri":YAHOO_REDIRECT_URI})
 
 @app.route("/auth/login")
 def yahoo_login():
     from urllib.parse import urlencode
-    params = {"client_id":YAHOO_CLIENT_ID,"redirect_uri":YAHOO_REDIRECT_URI,
-              "response_type":"code","scope":"fspt-r","state":f"br_{int(time.time())}"}
+    params={"client_id":YAHOO_CLIENT_ID,"redirect_uri":YAHOO_REDIRECT_URI,
+            "response_type":"code","scope":"fspt-r","state":f"br_{int(time.time())}"}
     return redirect(f"{YAHOO_AUTH_URL}?{urlencode(params)}")
 
 @app.route("/auth/callback")
 def yahoo_callback():
-    code = request.args.get("code","")
-    if not code: return "Missing code", 400
-    r = requests.post(YAHOO_TOKEN_URL,
+    code=request.args.get("code","")
+    if not code: return "Missing code",400
+    r=requests.post(YAHOO_TOKEN_URL,
         data={"grant_type":"authorization_code","code":code,"redirect_uri":YAHOO_REDIRECT_URI},
-        auth=(YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET))
-    if not r.ok: return f"Token exchange failed: {r.text}", 400
-    tok = r.json()
+        auth=(YAHOO_CLIENT_ID,YAHOO_CLIENT_SECRET))
+    if not r.ok: return f"Token exchange failed: {r.text}",400
+    tok=r.json()
     _save_tokens({"access_token":tok["access_token"],"refresh_token":tok.get("refresh_token",""),
                   "expires_at":time.time()+tok.get("expires_in",3600)})
     _cache.clear()
@@ -277,275 +296,233 @@ def auth_status():
 
 @app.route("/api/stats/current")
 def stats_current():
-    s = _current_season(); gk = YAHOO_GAME_KEYS.get(s, "428")
+    s=_current_season()
+    # 2025-26 is game key 466; fall back to 466 if season not in map
+    gk=YAHOO_GAME_KEYS.get(s,"466")
     def fetch():
-        result = _fetch_yahoo_players(gk, target=400); result["season"] = s; return result
-    d = _cached(f"yahoo_stats_{s}", fetch, CACHE_TTL)
-    if d.get("error") == "not_authenticated":
-        return jsonify({"error":"not_authenticated","players":[],"season":s}), 200
+        result=_fetch_yahoo_players(gk,target=400); result["season"]=s; return result
+    d=_cached(f"yahoo_stats_{s}",fetch,CACHE_TTL)
+    if d.get("error")=="not_authenticated":
+        return jsonify({"error":"not_authenticated","players":[],"season":s}),200
     if d.get("error") or not d.get("players"):
-        return jsonify({"error":d.get("error","no_data"),"players":[],"season":s}), 200
+        return jsonify({"error":d.get("error","no_data"),"players":[],"season":s}),200
     return jsonify(d)
-
-@app.route("/api/stats/season/<season>")
-def stats_season(season):
-    gk = YAHOO_GAME_KEYS.get(season)
-    if not gk: return jsonify({"error":f"Unknown season: {season}","players":[]}), 400
-    def fetch():
-        result = _fetch_yahoo_players(gk, target=400); result["season"] = season; return result
-    return jsonify(_cached(f"yahoo_stats_{season}", fetch, CACHE_TTL))
 
 @app.route("/api/cache/clear")
 def cache_clear():
     _cache.clear(); return jsonify({"cleared":True})
 
+# ── Debug — full annotated structure dumps ─────────────────────────────────────
+@app.route("/api/yahoo/league/<lk>/debug/standings")
+def debug_standings(lk):
+    data=_yahoo(f"/league/{lk}/standings",cache=False)
+    if "error" in data: return jsonify(data),401
+    raw=data.get("fantasy_content",{}).get("league",[])
+    return jsonify({"annotated":_annotate(raw),"raw_json":str(raw)[:6000]})
+
+@app.route("/api/yahoo/league/<lk>/debug/teams")
+def debug_teams(lk):
+    data=_yahoo(f"/league/{lk}/teams",cache=False)
+    if "error" in data: return jsonify(data),401
+    raw=data.get("fantasy_content",{}).get("league",[])
+    return jsonify({"annotated":_annotate(raw),"raw_json":str(raw)[:6000]})
+
+@app.route("/api/yahoo/league/<lk>/debug/roster")
+def debug_roster(lk):
+    data=_yahoo(f"/league/{lk}/teams/roster/players",cache=False)
+    if "error" in data: return jsonify(data),401
+    raw=data.get("fantasy_content",{}).get("league",[])
+    return jsonify({"annotated":_annotate(raw),"raw_json":str(raw)[:6000]})
+
+@app.route("/api/debug/stats")
+def debug_stats():
+    s=_current_season(); gk=YAHOO_GAME_KEYS.get(s,"466")
+    tok=_get_token()
+    if not tok: return jsonify({"error":"not_authenticated"})
+    url=f"{YAHOO_API_BASE}/game/{gk}/players;start=0;count=3;out=stats?format=json"
+    r=requests.get(url,headers={"Authorization":f"Bearer {tok}"},timeout=20)
+    return jsonify({"status":r.status_code,"season":s,"game_key":gk,
+                    "annotated":_annotate(r.json()),"raw":str(r.json())[:3000]})
+
 # ── Leagues ────────────────────────────────────────────────────────────────────
 @app.route("/api/yahoo/leagues")
 def yahoo_leagues():
-    """Fetch all NBA fantasy leagues across all seasons."""
-    data = _yahoo("/users;use_login=1/games;game_codes=nba/leagues", cache=False)
-    if "error" in data: return jsonify(data), 401
+    data=_yahoo("/users;use_login=1/games;game_codes=nba/leagues",cache=False)
+    if "error" in data: return jsonify(data),401
     try:
-        users = data["fantasy_content"]["users"]
-        user = users["0"]["user"]
-        # user is a list: [info_dict, {games: {...}}]
-        games_section = None
-        for item in user:
-            if isinstance(item, dict) and "games" in item:
-                games_section = item["games"]; break
+        user=data["fantasy_content"]["users"]["0"]["user"]
+        games_section=_find_key(user,"games")
         if not games_section:
-            return jsonify({"error":"no_games_found","raw":str(data)[:300]}), 500
-
-        leagues = []
-        for i in range(games_section.get("count", 0)):
-            game_entry = games_section[str(i)]["game"]
-            # game_entry is a list: [info_dict, {leagues: {...}}] or just info_dict
-            game_info = _merge(game_entry[0]) if isinstance(game_entry[0], list) else game_entry[0]
-            game_season = game_info.get("season", "")
-            leagues_section = None
-            for item in game_entry:
-                if isinstance(item, dict) and "leagues" in item:
-                    leagues_section = item["leagues"]; break
+            return jsonify({"error":"no_games","raw":str(data)[:500]}),500
+        leagues=[]
+        for i in range(games_section.get("count",0)):
+            game_entry=games_section[str(i)]["game"]
+            game_info=_merge(game_entry[0]) if isinstance(game_entry[0],list) else game_entry[0]
+            game_season=game_info.get("season","")
+            leagues_section=_find_in_list(game_entry,"leagues") if isinstance(game_entry,list) else game_entry.get("leagues")
             if not leagues_section: continue
-            for j in range(leagues_section.get("count", 0)):
-                lg_entry = leagues_section[str(j)]["league"]
-                # lg_entry can be a list of dicts or a single dict
-                lg = _merge(lg_entry) if isinstance(lg_entry, list) else lg_entry
-                leagues.append({
-                    "league_key":   lg.get("league_key"),
-                    "league_id":    lg.get("league_id"),
-                    "name":         lg.get("name"),
-                    "season":       lg.get("season") or game_season,
-                    "num_teams":    lg.get("num_teams"),
-                    "scoring_type": lg.get("scoring_type"),
-                    "draft_status": lg.get("draft_status"),
-                    "current_week": lg.get("current_week"),
-                    "is_finished":  lg.get("is_finished", 0),
-                })
-        leagues.sort(key=lambda x: str(x.get("season") or ""), reverse=True)
-        return jsonify({"leagues": leagues})
+            for j in range(leagues_section.get("count",0)):
+                lg_entry=leagues_section[str(j)]["league"]
+                lg=_merge(lg_entry) if isinstance(lg_entry,list) else lg_entry
+                leagues.append({"league_key":lg.get("league_key"),"league_id":lg.get("league_id"),
+                    "name":lg.get("name"),"season":lg.get("season") or game_season,
+                    "num_teams":lg.get("num_teams"),"scoring_type":lg.get("scoring_type"),
+                    "draft_status":lg.get("draft_status"),"current_week":lg.get("current_week"),
+                    "is_finished":lg.get("is_finished",0)})
+        leagues.sort(key=lambda x:str(x.get("season") or ""),reverse=True)
+        return jsonify({"leagues":leagues})
     except Exception as e:
-        return jsonify({"error":"parse_error","detail":str(e),
-                        "trace":traceback.format_exc()[-600:],"raw":str(data)[:400]}), 500
-
-# ── Debug endpoints ────────────────────────────────────────────────────────────
-@app.route("/api/yahoo/league/<lk>/debug")
-def yahoo_debug(lk):
-    data = _yahoo(f"/league/{lk}/teams/roster/players", cache=False)
-    return jsonify({"raw": str(data)[:5000]})
-
-@app.route("/api/yahoo/league/<lk>/debug/standings")
-def yahoo_debug_standings(lk):
-    data = _yahoo(f"/league/{lk}/standings", cache=False)
-    return jsonify({"raw": str(data)[:5000]})
-
-@app.route("/api/yahoo/league/<lk>/debug/myteam")
-def yahoo_debug_myteam(lk):
-    data = _yahoo(f"/league/{lk}/teams", cache=False)
-    return jsonify({"raw": str(data)[:5000]})
+        return jsonify({"error":"parse_error","detail":str(e),"trace":traceback.format_exc()[-600:]}),500
 
 # ── Standings ──────────────────────────────────────────────────────────────────
 @app.route("/api/yahoo/league/<lk>/standings")
 def yahoo_standings(lk):
-    data = _yahoo(f"/league/{lk}/standings", cache=False)
-    if "error" in data: return jsonify(data), 401
+    data=_yahoo(f"/league/{lk}/standings",cache=False)
+    if "error" in data: return jsonify(data),401
     try:
-        league_list = data["fantasy_content"]["league"]
-        # First element is always the league info dict
-        league_info = _merge(league_list[0]) if isinstance(league_list[0], list) else league_list[0]
-        scoring_type = league_info.get("scoring_type", "")
+        league_list=data["fantasy_content"]["league"]
+        league_info=_merge(league_list[0]) if isinstance(league_list[0],list) else league_list[0]
+        scoring_type=league_info.get("scoring_type","")
 
-        # Find teams inside standings
-        teams_raw = None
-        # Try: league_list[1]["standings"][0]["teams"]
+        # Yahoo H2H: league_list[1] = {"standings": [{"teams": {...}}]}
+        teams_raw=None
         for item in league_list:
-            if not isinstance(item, dict): continue
-            standings = item.get("standings")
+            if not isinstance(item,dict): continue
+            standings=item.get("standings")
             if standings is None: continue
-            # standings can be a list or dict
-            teams_raw = _deep_search(standings, "teams")
+            # standings is a list: [{"teams": {...}}] or dict {"0": {"teams": {...}}}
+            teams_raw=_find_key(standings,"teams")
             if teams_raw: break
 
         if not teams_raw:
             return jsonify({"error":"no_standings_found",
-                            "raw":str(league_list)[:2000]}), 500
+                            "hint":"Check /debug/standings for raw structure",
+                            "raw":str(league_list)[:2000]}),500
 
-        teams = []
-        for i in range(teams_raw.get("count", 0)):
-            t = teams_raw[str(i)]["team"]
-            # t[0] is a list of info dicts, t[1] is stats dict
-            info = _merge(t[0]) if isinstance(t[0], list) else t[0]
+        teams=[]
+        for i in range(teams_raw.get("count",0)):
+            t=teams_raw[str(i)]["team"]
+            info=_merge(t[0]) if isinstance(t[0],list) else t[0]
 
-            # team_standings can be in t[1] directly or nested
-            t1 = t[1] if len(t) > 1 else {}
-            ts = t1.get("team_standings", {}) if isinstance(t1, dict) else {}
-            if isinstance(ts, list): ts = _merge(ts)
+            # t[1:] is a list of dicts: team_stats, team_points, team_standings
+            # Walk all of them to find team_standings regardless of position
+            ts={}
+            for chunk in t[1:]:
+                if isinstance(chunk,dict):
+                    if "team_standings" in chunk:
+                        ts=chunk["team_standings"]
+                        if isinstance(ts,list): ts=_merge(ts)
+                        break
+                    # Sometimes team_standings is nested inside team_points or stats
+                    found=_find_key(chunk,"team_standings")
+                    if found:
+                        ts=found if not isinstance(found,list) else _merge(found)
+                        break
 
-            # outcome_totals: wins/losses/ties/percentage
-            ot = ts.get("outcome_totals", {}) if isinstance(ts, dict) else {}
-            if isinstance(ot, list): ot = _merge(ot)
+            # outcome_totals — direct child of team_standings
+            ot=ts.get("outcome_totals",{}) if isinstance(ts,dict) else {}
+            if isinstance(ot,list): ot=_merge(ot)
 
             # streak
-            streak = ""
-            sk = ts.get("streak", {}) if isinstance(ts, dict) else {}
-            if isinstance(sk, list): sk = _merge(sk)
-            if isinstance(sk, dict) and sk.get("type"):
-                streak = f"{sk['type'][0].upper()}{sk.get('value','')}"
+            streak=""
+            if isinstance(ts,dict):
+                sk=ts.get("streak",{})
+                if isinstance(sk,list): sk=_merge(sk)
+                if isinstance(sk,dict) and sk.get("type"):
+                    streak=f"{sk['type'][0].upper()}{sk.get('value','')}"
 
-            # rank — Yahoo uses "rank" inside team_standings for H2H
-            rank_val = None
-            if isinstance(ts, dict):
-                rank_val = ts.get("rank")
-            if rank_val is None:
-                rank_val = info.get("team_standings", {})
-            try: rank_val = int(rank_val)
-            except (TypeError, ValueError): rank_val = None
+            # rank
+            rank_val=None
+            if isinstance(ts,dict):
+                try: rank_val=int(ts.get("rank") or 0) or None
+                except: rank_val=None
 
-            # manager name — deep search handles all nesting variants
-            mgr_name = _extract_manager_name(info.get("managers"))
+            mgr_name=_extract_manager(info.get("managers"))
 
-            teams.append({
-                "team_key":      info.get("team_key"),
-                "name":          info.get("name", ""),
-                "manager":       mgr_name,
-                "rank":          rank_val,
-                "wins":          ot.get("wins"),
-                "losses":        ot.get("losses"),
-                "ties":          ot.get("ties"),
-                "pct":           ot.get("percentage"),
-                "points_for":    ts.get("points_for") if isinstance(ts, dict) else None,
-                "points_against":ts.get("points_against") if isinstance(ts, dict) else None,
-                "streak":        streak,
-                "scoring_type":  scoring_type,
-            })
+            teams.append({"team_key":info.get("team_key"),"name":info.get("name",""),
+                "manager":mgr_name,"rank":rank_val,
+                "wins":ot.get("wins"),"losses":ot.get("losses"),"ties":ot.get("ties"),
+                "pct":ot.get("percentage"),
+                "points_for":ts.get("points_for") if isinstance(ts,dict) else None,
+                "points_against":ts.get("points_against") if isinstance(ts,dict) else None,
+                "streak":streak,"scoring_type":scoring_type})
 
-        teams.sort(key=lambda x: x.get("rank") or 99)
-        return jsonify({
-            "teams": teams, "scoring_type": scoring_type,
-            "season": league_info.get("season"), "name": league_info.get("name",""),
-            "is_finished": league_info.get("is_finished", 0),
-        })
+        teams.sort(key=lambda x:x.get("rank") or 99)
+        return jsonify({"teams":teams,"scoring_type":scoring_type,
+                        "season":league_info.get("season"),"name":league_info.get("name",""),
+                        "is_finished":league_info.get("is_finished",0)})
     except Exception as e:
         return jsonify({"error":"parse_error","detail":str(e),
-                        "trace":traceback.format_exc()[-1000:],
-                        "raw":str(data)[:1000]}), 500
+                        "trace":traceback.format_exc()[-1200:],
+                        "raw":str(data)[:1500]}),500
 
 # ── Rosters ────────────────────────────────────────────────────────────────────
 @app.route("/api/yahoo/league/<lk>/rosters")
 def yahoo_rosters(lk):
-    data = _yahoo(f"/league/{lk}/teams/roster/players", cache=False)
-    if "error" in data: return jsonify(data), 401
+    data=_yahoo(f"/league/{lk}/teams/roster/players",cache=False)
+    if "error" in data: return jsonify(data),401
     try:
-        league_list = data["fantasy_content"]["league"]
-        teams_raw = _find_in_list(league_list, "teams")
-        if not teams_raw:
-            return jsonify({"error":"no_teams","raw":str(league_list)[:500]}), 500
-        rosters = []
-        for i in range(teams_raw.get("count", 0)):
-            t = teams_raw[str(i)]["team"]
-            info = _merge(t[0]) if isinstance(t[0], list) else t[0]
-            mgr_name = _extract_manager_name(info.get("managers"))
-            team_data = t[1] if len(t) > 1 else {}
-            roster_section = team_data.get("roster", {})
-            players_raw = roster_section.get("0", {}).get("players", {})
+        league_list=data["fantasy_content"]["league"]
+        teams_raw=_find_in_list(league_list,"teams")
+        if not teams_raw: return jsonify({"error":"no_teams","raw":str(league_list)[:500]}),500
+        rosters=[]
+        for i in range(teams_raw.get("count",0)):
+            t=teams_raw[str(i)]["team"]
+            info=_merge(t[0]) if isinstance(t[0],list) else t[0]
+            mgr_name=_extract_manager(info.get("managers"))
+            team_data=t[1] if len(t)>1 else {}
+            roster_section=team_data.get("roster",{})
+            players_raw=roster_section.get("0",{}).get("players",{})
             if not players_raw:
                 for v in roster_section.values():
-                    if isinstance(v, dict) and "players" in v:
-                        players_raw = v["players"]; break
-            players = []
-            for j in range(players_raw.get("count", 0)):
-                p = players_raw[str(j)]["player"]
+                    if isinstance(v,dict) and "players" in v: players_raw=v["players"]; break
+            players=[]
+            for j in range(players_raw.get("count",0)):
+                p=players_raw[str(j)]["player"]
                 players.append(_parse_player_roster(p))
-            rosters.append({
-                "team_key": info.get("team_key",""),
-                "name": info.get("name",""),
-                "manager": mgr_name,
-                "players": players,
-            })
-        return jsonify({"rosters": rosters})
+            rosters.append({"team_key":info.get("team_key",""),"name":info.get("name",""),
+                            "manager":mgr_name,"players":players})
+        return jsonify({"rosters":rosters})
     except Exception as e:
-        return jsonify({"error":"parse_error","detail":str(e),
-                        "trace":traceback.format_exc()[-800:]}), 500
+        return jsonify({"error":"parse_error","detail":str(e),"trace":traceback.format_exc()[-800:]}),500
 
 # ── My Team ────────────────────────────────────────────────────────────────────
 @app.route("/api/yahoo/league/<lk>/my_team")
 def yahoo_my_team(lk):
-    """Find the current user's team and return their roster."""
-    data = _yahoo(f"/league/{lk}/teams", cache=False)
-    if "error" in data: return jsonify(data), 401
+    data=_yahoo(f"/league/{lk}/teams",cache=False)
+    if "error" in data: return jsonify(data),401
     try:
-        league_list = data["fantasy_content"]["league"]
-        teams_raw = _find_in_list(league_list, "teams")
-        if not teams_raw:
-            return jsonify({"error":"no_teams","raw":str(league_list)[:400]}), 500
-
-        my_key = None
-        my_name = None
-        for i in range(teams_raw.get("count", 0)):
-            t = teams_raw[str(i)]["team"]
-            info = _merge(t[0]) if isinstance(t[0], list) else t[0]
-            # Deep search for is_current_login anywhere in this team entry
-            flag = _deep_search(t, "is_current_login")
-            if str(flag) == "1":
-                my_key = info.get("team_key")
-                my_name = info.get("name")
-                break
-
+        league_list=data["fantasy_content"]["league"]
+        teams_raw=_find_in_list(league_list,"teams")
+        if not teams_raw: return jsonify({"error":"no_teams","raw":str(league_list)[:400]}),500
+        my_key=None; my_name=None
+        for i in range(teams_raw.get("count",0)):
+            t=teams_raw[str(i)]["team"]
+            info=_merge(t[0]) if isinstance(t[0],list) else t[0]
+            if _extract_is_current_login(t):
+                my_key=info.get("team_key"); my_name=info.get("name"); break
         if not my_key:
-            # Fallback: return all team keys so client can debug
-            all_teams = []
-            for i in range(teams_raw.get("count", 0)):
-                t = teams_raw[str(i)]["team"]
-                info = _merge(t[0]) if isinstance(t[0], list) else t[0]
-                all_teams.append({"key": info.get("team_key"), "name": info.get("name")})
-            return jsonify({"error":"team_not_found","all_teams":all_teams}), 404
-
-        rd = _yahoo(f"/team/{my_key}/roster/players", cache=False)
-        if "error" in rd: return jsonify(rd), 401
-        team_list = rd["fantasy_content"]["team"]
-        roster_section = _find_in_list(team_list, "roster")
-        players_raw = {}
-        if roster_section:
-            # roster can be {"0": {"players": {...}}, ...} or {"players": {...}}
-            players_raw = roster_section.get("0", {}).get("players", {})
-            if not players_raw:
-                players_raw = roster_section.get("players", {})
-            if not players_raw:
-                for v in roster_section.values():
-                    if isinstance(v, dict) and "players" in v:
-                        players_raw = v["players"]; break
-
-        players = []
-        for j in range(players_raw.get("count", 0)):
-            p = players_raw[str(j)]["player"]
-            players.append(_parse_player_roster(p))
-
+            all_teams=[{"key":_merge(teams_raw[str(i)]["team"][0]).get("team_key"),
+                        "name":_merge(teams_raw[str(i)]["team"][0]).get("name")}
+                       for i in range(teams_raw.get("count",0))]
+            return jsonify({"error":"team_not_found","all_teams":all_teams}),404
+        rd=_yahoo(f"/team/{my_key}/roster/players",cache=False)
+        if "error" in rd: return jsonify(rd),401
+        team_list=rd["fantasy_content"]["team"]
+        roster_section=_find_in_list(team_list,"roster") or {}
+        players_raw=roster_section.get("0",{}).get("players",{})
+        if not players_raw:
+            players_raw=roster_section.get("players",{})
+        if not players_raw:
+            for v in roster_section.values():
+                if isinstance(v,dict) and "players" in v: players_raw=v["players"]; break
+        players=[_parse_player_roster(players_raw[str(j)]["player"])
+                 for j in range(players_raw.get("count",0))]
         return jsonify({"team_key":my_key,"team_name":my_name,"players":players,"count":len(players)})
     except Exception as e:
-        return jsonify({"error":"parse_error","detail":str(e),
-                        "trace":traceback.format_exc()[-800:]}), 500
+        return jsonify({"error":"parse_error","detail":str(e),"trace":traceback.format_exc()[-800:]}),500
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+if __name__=="__main__":
+    port=int(os.environ.get("PORT",5000))
     print(f"🏀 Boardroom on :{port}  redirect={YAHOO_REDIRECT_URI}")
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0",port=port,debug=True)

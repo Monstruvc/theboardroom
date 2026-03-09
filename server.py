@@ -265,7 +265,18 @@ def yahoo_standings(league_key):
     data = _yahoo_get(f"/league/{league_key}/standings")
     if "error" in data: return jsonify(data), 401
     try:
-        teams_raw = data["fantasy_content"]["league"][1]["standings"][0]["teams"]
+        league_raw = data["fantasy_content"]["league"]
+        teams_raw = None
+        for item in league_raw:
+            if isinstance(item, dict) and "standings" in item:
+                standings = item["standings"]
+                if isinstance(standings, list):
+                    teams_raw = standings[0].get("teams")
+                elif isinstance(standings, dict):
+                    teams_raw = standings.get("0", {}).get("teams")
+                break
+        if teams_raw is None:
+            return jsonify({"error":"parse_error","detail":"could not find standings","raw":str(data)[:500]}), 500
         teams = []
         for i in range(teams_raw["count"]):
             t = teams_raw[str(i)]["team"]

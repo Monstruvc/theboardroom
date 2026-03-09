@@ -227,6 +227,9 @@
   .queue-chip button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.75rem; line-height: 1; }
   .queue-chip button:hover { color: var(--red); }
 
+  /* SEASON TABS */
+  .season-tab-active { background: var(--accent2) !important; color: white !important; }
+
   @media (max-width: 768px) {
     .grid-3 { grid-template-columns: 1fr 1fr; }
     nav button { font-size: 0.78rem; padding: 0.3rem 0.6rem; }
@@ -458,23 +461,56 @@
   </div>
 
   <div id="leagueConnected" style="display:none">
+
+    <!-- League + Season selector row -->
     <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">YOUR LEAGUES</div>
-      <div id="leagueSelector" style="display:flex;gap:0.5rem;flex-wrap:wrap"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
+        <div>
+          <div class="card-title" style="margin-bottom:0.5rem">YOUR LEAGUES</div>
+          <div id="leagueSelector" style="display:flex;gap:0.5rem;flex-wrap:wrap"></div>
+        </div>
+        <div id="seasonSwitcher" style="display:none">
+          <div class="card-title" style="margin-bottom:0.5rem">SEASON</div>
+          <div id="seasonTabs" style="display:flex;gap:0.4rem;flex-wrap:wrap"></div>
+        </div>
+      </div>
+      <div id="yahooSyncBar" style="display:none;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border);gap:0.75rem;align-items:center;flex-wrap:wrap">
+        <button class="btn secondary" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="syncYahooRosters()">⟳ Refresh Rosters</button>
+        <span id="yahooSyncStatus" style="color:var(--muted);font-size:0.78rem"></span>
+      </div>
     </div>
+
+    <!-- Standings card -->
     <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">STANDINGS <span id="standingsLeagueName" style="font-weight:400;color:var(--muted);font-size:0.8rem"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
+        <div class="card-title" style="margin-bottom:0">
+          STANDINGS
+          <span id="standingsLeagueName" style="font-weight:400;color:var(--muted);font-size:0.8rem"></span>
+          <span id="standingsSeasonBadge" style="margin-left:0.4rem"></span>
+        </div>
+        <span id="standingsLoadMsg" style="color:var(--muted);font-size:0.78rem"></span>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>RANK</th><th>TEAM</th><th>MANAGER</th><th>W</th><th>L</th><th>T</th><th>PCT</th><th>STREAK</th><th>PF</th><th>PA</th></tr></thead>
+          <thead>
+            <tr>
+              <th>RANK</th><th>TEAM</th><th>MANAGER</th>
+              <th style="color:var(--green)">W</th>
+              <th style="color:var(--red)">L</th>
+              <th>T</th><th>PCT</th><th>STREAK</th><th>PF</th><th>PA</th>
+            </tr>
+          </thead>
           <tbody id="standingsTable"></tbody>
         </table>
       </div>
     </div>
-    <div class="card">
+
+    <!-- Rosters card — current season only -->
+    <div id="rostersCard" class="card">
       <div class="card-title">ALL ROSTERS <span id="rostersSubtitle" style="font-weight:400;color:var(--muted);font-size:0.8rem"></span></div>
       <div id="rostersGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-top:0.75rem"></div>
     </div>
+
   </div>
 </div>
 
@@ -1339,42 +1375,48 @@ function _fillRosterInputs(containerId, names) {
 async function syncRosterToBalance() {
   const statusEl = document.getElementById('balanceSyncStatus');
   if (!yahooConnected) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">Connect Yahoo first (League tab)</span>';
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">Connect Yahoo first — <a href="#" onclick="showPage('league');yahooLogin();return false" style="color:var(--accent2)">go to League tab</a></span>`;
     return;
   }
   if (!selectedLeagueKey) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold)">Select a league in the League tab first</span>';
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--gold)">Select a league in the <a href="#" onclick="showPage('league');return false" style="color:var(--accent2)">League tab</a> first</span>`;
     return;
   }
-  if (statusEl) statusEl.textContent = '⟳ Importing...';
+  if (statusEl) statusEl.innerHTML = `<span style="color:var(--muted)">⟳ Importing your roster...</span>`;
   const result = await _fetchMyRosterPlayers();
   if (result.error) {
-    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">Error: ${result.error}</span>`;
+    const msg = result.error === 'no_players' ? 'No players found on your roster'
+              : result.error === 'not_connected' ? 'Yahoo not connected'
+              : result.error;
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">✗ ${msg}</span>`;
     return;
   }
   _fillRosterInputs('rosterInputs', result.names);
-  if (statusEl) statusEl.innerHTML = `<span style="color:var(--green)">✓ ${result.names.length} players imported</span>`;
+  if (statusEl) statusEl.innerHTML = `<span style="color:var(--green)">✓ ${result.names.length} players imported from Yahoo</span>`;
   analyzeRoster();
 }
 
 async function syncRosterToKeepers() {
   const statusEl = document.getElementById('keeperSyncStatus');
   if (!yahooConnected) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">Connect Yahoo first (League tab)</span>';
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">Connect Yahoo first — <a href="#" onclick="showPage('league');yahooLogin();return false" style="color:var(--accent2)">go to League tab</a></span>`;
     return;
   }
   if (!selectedLeagueKey) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold)">Select a league in the League tab first</span>';
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--gold)">Select a league in the <a href="#" onclick="showPage('league');return false" style="color:var(--accent2)">League tab</a> first</span>`;
     return;
   }
-  if (statusEl) statusEl.textContent = '⟳ Importing...';
+  if (statusEl) statusEl.innerHTML = `<span style="color:var(--muted)">⟳ Importing your roster...</span>`;
   const result = await _fetchMyRosterPlayers();
   if (result.error) {
-    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">Error: ${result.error}</span>`;
+    const msg = result.error === 'no_players' ? 'No players found on your roster'
+              : result.error === 'not_connected' ? 'Yahoo not connected'
+              : result.error;
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">✗ ${msg}</span>`;
     return;
   }
   _fillRosterInputs('keeperRosterInputs', result.names);
-  if (statusEl) statusEl.innerHTML = `<span style="color:var(--green)">✓ ${result.names.length} players imported</span>`;
+  if (statusEl) statusEl.innerHTML = `<span style="color:var(--green)">✓ ${result.names.length} players imported from Yahoo</span>`;
   analyzeKeepers();
 }
 
@@ -1383,8 +1425,16 @@ async function syncRosterToKeepers() {
 // =============================================
 const SERVER = 'https://app.keyzen.art';
 let yahooConnected = false;
-let selectedLeagueKey = null;
-let yahooRosterMap = {}; // playerName → { teamName, slot, status }
+let selectedLeagueKey = null;   // current-season league key (for rosters)
+let yahooRosterMap = {};         // playerName → { teamName, slot, status }
+
+// All leagues keyed by leagueId (name-based grouping across seasons)
+// allLeagues: [ { league_key, name, season, num_teams, ... } ]
+let allLeagues = [];
+// leagueGroups: { "The Boardroom": [ {2025-26 entry}, {2024-25 entry} ] }
+let leagueGroups = {};
+let selectedGroupName = null;
+let selectedSeasonKey = null;    // league_key for standings view (may differ from selectedLeagueKey)
 
 function yahooLogin() {
   window.location.href = `${SERVER}/auth/login`;
@@ -1394,7 +1444,10 @@ function yahooLogout() {
   fetch(`${SERVER}/auth/logout`).finally(() => {
     yahooConnected = false;
     selectedLeagueKey = null;
+    selectedSeasonKey = null;
     yahooRosterMap = {};
+    allLeagues = [];
+    leagueGroups = {};
     updateYahooUI(false);
     owned.clear();
     renderTable();
@@ -1416,20 +1469,30 @@ async function checkYahooAuth() {
 
 function updateYahooUI(connected) {
   const lbl = document.getElementById('yahooAuthLabel');
-  const syncBar = document.getElementById('yahooSyncBar');
   const notConn = document.getElementById('leagueNotConnected');
   const conn = document.getElementById('leagueConnected');
   if (connected) {
     if (lbl) lbl.textContent = '⚡ Yahoo Connected';
-    if (syncBar) syncBar.style.display = 'flex';
     if (notConn) notConn.style.display = 'none';
     if (conn) conn.style.display = 'block';
   } else {
     if (lbl) lbl.textContent = '⚡ Connect Yahoo';
-    if (syncBar) syncBar.style.display = 'none';
     if (notConn) notConn.style.display = 'block';
     if (conn) conn.style.display = 'none';
   }
+}
+
+// Group leagues by name (same league across multiple seasons)
+function _groupLeagues(leagues) {
+  const groups = {};
+  leagues.forEach(lg => {
+    const key = lg.name || lg.league_id;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(lg);
+  });
+  // Sort each group newest first
+  Object.values(groups).forEach(g => g.sort((a,b) => b.season - a.season));
+  return groups;
 }
 
 async function loadYahooLeagues() {
@@ -1437,66 +1500,136 @@ async function loadYahooLeagues() {
     const r = await fetch(`${SERVER}/api/yahoo/leagues`, { credentials: 'include' });
     const d = await r.json();
     if (d.error) { showToast('Yahoo: ' + d.error); return; }
-    const leagues = d.leagues || [];
+    allLeagues = d.leagues || [];
+    leagueGroups = _groupLeagues(allLeagues);
+
+    // Render league group buttons
     const sel = document.getElementById('leagueSelector');
     if (!sel) return;
-    sel.innerHTML = leagues.map(lg =>
-      `<button class="btn secondary" style="font-size:0.82rem" onclick="selectLeague('${lg.league_key}','${lg.name.replace(/'/g,"\\'")}')">
-        ${lg.name} <span style="color:var(--muted)">(${lg.season})</span>
+    sel.innerHTML = Object.keys(leagueGroups).map(name =>
+      `<button class="btn secondary" style="font-size:0.82rem" onclick="selectLeagueGroup('${name.replace(/'/g,"\\'")}')">
+        ${name}
       </button>`
     ).join('');
-    // Auto-select most recent
-    if (leagues.length > 0) {
-      const latest = leagues.sort((a,b) => b.season - a.season)[0];
-      selectLeague(latest.league_key, latest.name);
-    }
+
+    // Auto-select first group
+    const firstGroup = Object.keys(leagueGroups)[0];
+    if (firstGroup) selectLeagueGroup(firstGroup);
   } catch(e) { showToast('Could not load leagues'); }
 }
 
-async function selectLeague(leagueKey, leagueName) {
-  selectedLeagueKey = leagueKey;
-  const nameEl = document.getElementById('yahooLeagueName');
-  if (nameEl) nameEl.textContent = leagueName;
-  // Highlight selected button
+function selectLeagueGroup(groupName) {
+  selectedGroupName = groupName;
+  const group = leagueGroups[groupName] || [];
+
+  // Highlight selected league button
   document.querySelectorAll('#leagueSelector button').forEach(b => {
-    b.classList.toggle('blue', b.textContent.includes(leagueName));
+    b.style.background = b.textContent.trim().startsWith(groupName) ? 'var(--accent2)' : '';
+    b.style.color = b.textContent.trim().startsWith(groupName) ? 'white' : '';
   });
-  await Promise.all([loadStandings(leagueKey), syncYahooRosters(leagueKey)]);
+
+  // Build season tabs
+  const tabsEl = document.getElementById('seasonTabs');
+  const switcher = document.getElementById('seasonSwitcher');
+  if (!tabsEl || !switcher) return;
+
+  switcher.style.display = group.length > 1 ? 'block' : 'none';
+
+  // Current season = most recent entry in the group
+  const currentEntry = group[0];
+  selectedLeagueKey = currentEntry.league_key; // used for rosters
+
+  tabsEl.innerHTML = group.map((lg, i) => {
+    const isCurrent = i === 0;
+    const label = isCurrent ? `${lg.season} (Current)` : lg.season;
+    return `<button class="btn ${isCurrent ? 'blue' : 'secondary'}" id="season-tab-${lg.league_key}"
+      style="font-size:0.78rem;padding:0.3rem 0.8rem"
+      onclick="selectSeasonTab('${lg.league_key}','${lg.season}',${isCurrent})">
+      ${label}
+    </button>`;
+  }).join('');
+
+  // Load current season by default
+  selectSeasonTab(currentEntry.league_key, currentEntry.season, true);
 }
 
-async function loadStandings(leagueKey) {
+function selectSeasonTab(leagueKey, season, isCurrent) {
+  selectedSeasonKey = leagueKey;
+
+  // Update tab highlights
+  document.querySelectorAll('[id^="season-tab-"]').forEach(b => {
+    const isThis = b.id === `season-tab-${leagueKey}`;
+    b.className = `btn ${isThis ? 'blue' : 'secondary'}`;
+    b.style.fontSize = '0.78rem';
+    b.style.padding = '0.3rem 0.8rem';
+  });
+
+  // Badge on standings header
+  const badge = document.getElementById('standingsSeasonBadge');
+  if (badge) {
+    badge.innerHTML = isCurrent
+      ? `<span style="background:var(--green);color:#000;font-family:var(--font-head);font-size:0.7rem;font-weight:700;padding:0.1rem 0.4rem;border-radius:3px;margin-left:0.25rem">LIVE</span>`
+      : `<span style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-family:var(--font-head);font-size:0.7rem;font-weight:700;padding:0.1rem 0.4rem;border-radius:3px;margin-left:0.25rem">FINAL ${season}</span>`;
+  }
+
+  // Show/hide rosters card (only for current season)
+  const rostersCard = document.getElementById('rostersCard');
+  const syncBar = document.getElementById('yahooSyncBar');
+  if (rostersCard) rostersCard.style.display = isCurrent ? 'block' : 'none';
+  if (syncBar) syncBar.style.display = isCurrent ? 'flex' : 'none';
+
+  // Load standings for selected season
+  loadStandings(leagueKey, season, isCurrent);
+
+  // Only sync rosters for current season
+  if (isCurrent && selectedLeagueKey) {
+    syncYahooRosters(selectedLeagueKey);
+  }
+}
+
+async function loadStandings(leagueKey, season, isCurrent) {
   const tbody = document.getElementById('standingsTable');
-  if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="color:var(--muted);padding:1rem">Loading standings...</td></tr>`;
+  const msgEl = document.getElementById('standingsLoadMsg');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="color:var(--muted);padding:1rem;text-align:center">
+    <div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto 0.5rem"></div>
+    Loading ${season} standings...
+  </td></tr>`;
+  if (msgEl) msgEl.textContent = '';
+
   try {
     const r = await fetch(`${SERVER}/api/yahoo/league/${leagueKey}/standings?t=${Date.now()}`, { credentials: 'include' });
     const d = await r.json();
     if (!tbody) return;
 
-    // Show league name + season
+    // Update league name in header
     const lbl = document.getElementById('standingsLeagueName');
-    if (lbl && d.name) lbl.textContent = `· ${d.name} ${d.season||''}`;
+    if (lbl && d.name) lbl.textContent = `· ${d.name}`;
 
     if (d.error || !d.teams || d.teams.length === 0) {
       tbody.innerHTML = `<tr><td colspan="10" style="color:var(--red);padding:1rem">
-        ${d.error||'No standings data'} ${d.detail ? '— '+d.detail : ''}
-        <br><small style="color:var(--muted)">${d.raw||''}</small>
+        ${d.error || 'No standings data'} ${d.detail ? '— ' + d.detail : ''}
       </td></tr>`;
       return;
     }
 
-    const isCats = (d.scoring_type||'').includes('head') || d.teams[0]?.scoring_type?.includes('head');
+    if (msgEl) msgEl.textContent = `${d.teams.length} teams · ${isCurrent ? 'Live' : 'Final ' + season}`;
+
     tbody.innerHTML = d.teams.map(t => {
-      const rankClass = t.rank <= 3 ? 'top10' : t.rank <= 5 ? 'top25' : '';
+      const rankClass = t.rank === 1 ? 'top10' : t.rank <= 3 ? 'top25' : '';
       const streakColor = (t.streak||'').startsWith('W') ? 'var(--green)' : (t.streak||'').startsWith('L') ? 'var(--red)' : 'var(--muted)';
-      return `<tr>
+      const rowStyle = t.rank === 1 ? 'background:rgba(251,191,36,0.06)' : '';
+      const champBadge = !isCurrent && t.rank === 1
+        ? `<span style="font-size:0.65rem;background:var(--gold);color:#000;font-family:var(--font-head);font-weight:700;padding:0.1rem 0.35rem;border-radius:3px;margin-left:0.35rem">🏆 CHAMP</span>`
+        : '';
+      return `<tr style="${rowStyle}">
         <td><span class="rank-badge ${rankClass}">${t.rank||'—'}</span></td>
-        <td><strong>${t.name}</strong></td>
+        <td><strong>${t.name}</strong>${champBadge}</td>
         <td style="color:var(--muted)">${t.manager||'—'}</td>
         <td style="color:var(--green)">${t.wins??'—'}</td>
         <td style="color:var(--red)">${t.losses??'—'}</td>
         <td style="color:var(--muted)">${t.ties??'—'}</td>
         <td>${t.pct ? (parseFloat(t.pct)*100).toFixed(1)+'%' : '—'}</td>
-        <td style="color:${streakColor}">${t.streak||'—'}</td>
+        <td style="color:${streakColor}">${isCurrent ? (t.streak||'—') : '—'}</td>
         <td style="color:var(--muted)">${t.points_for??'—'}</td>
         <td style="color:var(--muted)">${t.points_against??'—'}</td>
       </tr>`;

@@ -273,24 +273,39 @@ def cache_clear():
 
 @app.route("/api/yahoo/leagues")
 def yahoo_leagues():
+    """Fetch all NBA fantasy leagues for this user across all seasons."""
+    # Use games;game_codes=nba to get all seasons the user has participated in
     data = _yahoo("/users;use_login=1/games;game_codes=nba/leagues", cache=False)
     if "error" in data: return jsonify(data), 401
     try:
         games = data["fantasy_content"]["users"]["0"]["user"][1]["games"]
         leagues = []
-        for i in range(games["count"]):
+        for i in range(games.get("count", 0)):
             game = games[str(i)]["game"]
-            if "leagues" not in game[1]: continue
+            game_info = _merge(game[0]) if isinstance(game[0], list) else game[0]
+            season = game_info.get("season", "")
+            if not isinstance(game[1], dict) or "leagues" not in game[1]:
+                continue
             ld = game[1]["leagues"]
-            for j in range(ld["count"]):
-                lg = ld[str(j)]["league"][0]
-                leagues.append({"league_key":lg.get("league_key"),"league_id":lg.get("league_id"),
-                    "name":lg.get("name"),"season":lg.get("season"),"num_teams":lg.get("num_teams"),
-                    "scoring_type":lg.get("scoring_type"),"draft_status":lg.get("draft_status"),
-                    "current_week":lg.get("current_week")})
-        return jsonify({"leagues":leagues})
+            for j in range(ld.get("count", 0)):
+                lg_data = ld[str(j)]["league"]
+                lg = _merge(lg_data) if isinstance(lg_data, list) else lg_data
+                leagues.append({
+                    "league_key":   lg.get("league_key"),
+                    "league_id":    lg.get("league_id"),
+                    "name":         lg.get("name"),
+                    "season":       lg.get("season") or season,
+                    "num_teams":    lg.get("num_teams"),
+                    "scoring_type": lg.get("scoring_type"),
+                    "draft_status": lg.get("draft_status"),
+                    "current_week": lg.get("current_week"),
+                    "is_finished":  lg.get("is_finished", 0),
+                })
+        # Sort newest season first
+        leagues.sort(key=lambda x: str(x.get("season") or ""), reverse=True)
+        return jsonify({"leagues": leagues})
     except Exception as e:
-        return jsonify({"error":"parse_error","detail":str(e),"raw":str(data)[:500]}), 500
+        return jsonify({"error": "parse_error", "detail": str(e), "raw": str(data)[:500]}), 500
 
 @app.route("/api/yahoo/league/<lk>/debug")
 def yahoo_debug(lk):
@@ -347,7 +362,8 @@ def yahoo_standings(lk):
                 "streak":streak,"scoring_type":scoring_type})
         teams.sort(key=lambda x: x.get("rank") or 99)
         return jsonify({"teams":teams,"scoring_type":scoring_type,
-                        "season":league_info.get("season"),"name":league_info.get("name","")})
+                        "season":league_info.get("season"),"name":league_info.get("name",""),
+                        "is_finished":league_info.get("is_finished",0)})
     except Exception as e:
         return jsonify({"error":"parse_error","detail":str(e),
                         "trace":traceback.format_exc()[-800:],"raw":str(data)[:800]}), 500

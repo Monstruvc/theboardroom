@@ -24,38 +24,17 @@ YAHOO_AUTH_URL  = "https://api.login.yahoo.com/oauth2/request_auth"
 YAHOO_TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 YAHOO_API_BASE  = "https://fantasysports.yahooapis.com/fantasy/v2"
 
-# ─── TOKEN STORE (file-based so it survives across gunicorn workers) ────────
-_TOKEN_FILE = "/tmp/boardroom_tokens.json"
+# ─── TOKEN STORE (in-process dict, safe with 1 worker + threads) ────────────
 _cache = {}
 CACHE_TTL       = 3600
 YAHOO_CACHE_TTL = 300
 
-def _load_tokens():
-    try:
-        with open(_TOKEN_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def _save_tokens(data):
-    try:
-        with open(_TOKEN_FILE, "w") as f:
-            json.dump(data, f)
-    except Exception:
-        pass
-
-# Convenience shim so existing code still works
-class _TokenStore:
-    def get(self, k, default=None):
-        return _load_tokens().get(k, default)
-    def __setitem__(self, k, v):
-        d = _load_tokens(); d[k] = v; _save_tokens(d)
-    def __getitem__(self, k):
-        return _load_tokens()[k]
-    def clear(self):
-        _save_tokens({})
-
-_token_store = _TokenStore()
+# Single global dict — persists for the lifetime of the process
+_token_store = {
+    "access_token":  None,
+    "refresh_token": None,
+    "expires_at":    0,
+}
 
 def _cached(key, fn, ttl=CACHE_TTL):
     now = time.time()
@@ -266,37 +245,54 @@ def yahoo_standings(league_key):
     if "error" in data: return jsonify(data), 401
     try:
         league_raw = data["fantasy_content"]["league"]
+        # league_raw is a list — find the dict that has "standings"
         teams_raw = None
         for item in league_raw:
-            if isinstance(item, dict) and "standings" in item:
-                standings = item["standings"]
-                if isinstance(standings, list):
-                    teams_raw = standings[0].get("teams")
-                elif isinstance(standings, dict):
-                    teams_raw = standings.get("0", {}).get("teams")
-                break
+            if not isinstance(item, dict): continue
+            if "standings" not in item: continue
+            standings = item["standings"]
+            # standings can be list or dict
+            if isinstance(standings, list):
+                for s in standings:
+                    if isinstance(s, dict) and "teams" in s:
+                        teams_raw = s["teams"]; break
+            elif isinstance(standings, dict):
+                for v in standings.values():
+                    if isinstance(v, dict) and "teams" in v:
+                        teams_raw = v["teams"]; break
+            if teams_raw: break
         if teams_raw is None:
-            return jsonify({"error":"parse_error","detail":"could not find standings","raw":str(data)[:500]}), 500
+            return jsonify({"error":"parse_error","detail":"could not find teams in standings","raw":str(data)[:800]}), 500
         teams = []
-        for i in range(teams_raw["count"]):
+        for i in range(teams_raw.get("count", 0)):
             t = teams_raw[str(i)]["team"]
-            info = _parse_info_list(t[0])
+            # t is a list: [info_list_or_dict, stats_dict]
+            info = _parse_info_list(t[0]) if isinstance(t[0], list) else t[0]
             stats = t[1] if len(t) > 1 else {}
             ts = stats.get("team_standings", {})
-            ot = ts.get("outcome_totals", {})
+            if isinstance(ts, list): ts = ts[0] if ts else {}
+            ot = ts.get("outcome_totals", {}) if isinstance(ts, dict) else {}
+            # Manager
+            mgr = info.get("managers", {})
+            if isinstance(mgr, dict):
+                mgr_obj = mgr.get("manager", {})
+                mgr_name = mgr_obj.get("nickname","") if isinstance(mgr_obj, dict) else ""
+            else:
+                mgr_name = ""
             teams.append({
                 "team_key": info.get("team_key"), "team_id": info.get("team_id"),
-                "name": info.get("name"),
-                "manager": info.get("managers",{}).get("manager",{}).get("nickname",""),
-                "logo": next((x.get("url") for x in info.get("team_logos",{}).get("team_logo",[{}]) if isinstance(x,dict) and x.get("url")),""),
-                "rank": ts.get("rank"),
+                "name": info.get("name", ""),
+                "manager": mgr_name,
+                "rank": ts.get("rank") if isinstance(ts, dict) else None,
                 "wins": ot.get("wins"), "losses": ot.get("losses"), "ties": ot.get("ties"),
                 "pct": ot.get("percentage"),
-                "points_for": ts.get("points_for"), "points_against": ts.get("points_against"),
+                "points_for": ts.get("points_for") if isinstance(ts, dict) else None,
+                "points_against": ts.get("points_against") if isinstance(ts, dict) else None,
             })
         return jsonify({"teams": teams})
     except Exception as e:
-        return jsonify({"error":"parse_error","detail":str(e),"raw":str(data)[:800]}), 500
+        import traceback
+        return jsonify({"error":"parse_error","detail":str(e),"trace":traceback.format_exc()[-800:],"raw":str(data)[:800]}), 500
 
 @app.route("/api/yahoo/league/<league_key>/rosters")
 def yahoo_rosters(league_key):

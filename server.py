@@ -19,16 +19,43 @@ CORS(app, supports_credentials=True)
 # ─── YAHOO CONFIG ───────────────────────────────────────────────────────────
 YAHOO_CLIENT_ID     = os.environ.get("YAHOO_CLIENT_ID",     "dj0yJmk9TmV3N2cwSzVBZmtlJmQ9WVdrOWRHVkJUV3hTVEhvbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PWZj")
 YAHOO_CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET", "26b682df3839b70b040110b696a248d3c48fa442")
-YAHOO_REDIRECT_URI  = os.environ.get("YAHOO_REDIRECT_URI",  "https://app.keyzen.art/auth/callback")
+YAHOO_REDIRECT_URI  = os.environ.get("YAHOO_REDIRECT_URI",  "https://keyzen.art/auth/callback")
 YAHOO_AUTH_URL  = "https://api.login.yahoo.com/oauth2/request_auth"
 YAHOO_TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 YAHOO_API_BASE  = "https://fantasysports.yahooapis.com/fantasy/v2"
 
-# ─── IN-MEMORY STORE ────────────────────────────────────────────────────────
-_token_store = {}
+# ─── TOKEN STORE (file-based so it survives across gunicorn workers) ────────
+_TOKEN_FILE = "/tmp/boardroom_tokens.json"
 _cache = {}
 CACHE_TTL       = 3600
 YAHOO_CACHE_TTL = 300
+
+def _load_tokens():
+    try:
+        with open(_TOKEN_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_tokens(data):
+    try:
+        with open(_TOKEN_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+# Convenience shim so existing code still works
+class _TokenStore:
+    def get(self, k, default=None):
+        return _load_tokens().get(k, default)
+    def __setitem__(self, k, v):
+        d = _load_tokens(); d[k] = v; _save_tokens(d)
+    def __getitem__(self, k):
+        return _load_tokens()[k]
+    def clear(self):
+        _save_tokens({})
+
+_token_store = _TokenStore()
 
 def _cached(key, fn, ttl=CACHE_TTL):
     now = time.time()
@@ -127,10 +154,16 @@ def cache_clear():
     return jsonify({"cleared": True})
 
 # ─── YAHOO OAUTH ─────────────────────────────────────────────────────────────
+_pending_states = {}  # avoids session cookie issues on Railway
 @app.route("/auth/login")
 def yahoo_login():
     state = secrets.token_urlsafe(16)
-    session["oauth_state"] = state
+    _pending_states[state] = time.time()
+    # Clean up old states older than 10 min
+    cutoff = time.time() - 600
+    for k in list(_pending_states.keys()):
+        if _pending_states[k] < cutoff:
+            del _pending_states[k]
     params = {"client_id":YAHOO_CLIENT_ID,"redirect_uri":YAHOO_REDIRECT_URI,
               "response_type":"code","scope":"fspt-r","state":state}
     return redirect(f"{YAHOO_AUTH_URL}?{urlencode(params)}")
@@ -142,8 +175,9 @@ def yahoo_callback():
         return f"<h2>Auth error: {error}</h2><a href='/'>Back</a>", 400
     code  = request.args.get("code")
     state = request.args.get("state")
-    if state != session.get("oauth_state"):
-        return "<h2>State mismatch</h2>", 403
+    if state not in _pending_states:
+        return "<h2>State invalid — please try connecting again</h2><a href=\'/?retry=1\'>Back</a>", 403
+    del _pending_states[state]
     resp = requests.post(YAHOO_TOKEN_URL, data={
         "grant_type":"authorization_code","code":code,"redirect_uri":YAHOO_REDIRECT_URI,
     }, auth=(YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET))
